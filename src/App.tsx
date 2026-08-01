@@ -16,11 +16,12 @@ import { restoreProgressFromBackend } from './store/persistStore';
 import { restorePhrasesFromBackend, getPhraseSyncResult } from './data/phraseStore';
 import { PhraseBookPage } from './components/PhraseBookPage';
 import SyncSettingsPage from './components/SyncSettingsPage';
+import { AbyssPortal } from './components/AbyssPortal';
 import { getStoredToken, pullFromGist, pullFromGistAnonymous } from './data/gistSync';
 import SaveStatusToast from './components/SaveStatusToast';
 import './App.css';
 
-type AppView = 'home' | 'learning' | 'reading-learning' | 'page-transition' | 'create-book' | 'reading' | 'phrasebook' | 'sync-settings';
+type AppView = 'home' | 'learning' | 'reading-learning' | 'page-transition' | 'create-book' | 'reading' | 'phrasebook' | 'sync-settings' | 'abyss';
 
 function App() {
   const [view, setView] = useState<AppView>('home');
@@ -150,6 +151,14 @@ function App() {
 
   const handleOpenSyncSettings = useCallback(() => {
     setView('sync-settings');
+  }, []);
+
+  const handleOpenAbyss = useCallback(() => {
+    setView('abyss');
+  }, []);
+
+  const handleExitAbyss = useCallback(() => {
+    setView('home');
   }, []);
 
   const handleStartLearning = useCallback((bookId: string, pageIndex: number) => {
@@ -431,6 +440,7 @@ function App() {
             onOpenReading={handleOpenReading}
             onOpenPhraseBook={handleOpenPhraseBook}
             onOpenSyncSettings={handleOpenSyncSettings}
+            onOpenAbyss={handleOpenAbyss}
           />
         </div>
       </div>
@@ -469,6 +479,11 @@ function App() {
     return (
       <SyncSettingsPage onBack={goHome} />
     );
+  }
+
+  // 🦐 异世界入口
+  if (view === 'abyss') {
+    return <AbyssPortal onExit={handleExitAbyss} />;
   }
 
   // ★ 阅读篇目学习 — 过渡页

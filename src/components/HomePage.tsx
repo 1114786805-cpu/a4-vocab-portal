@@ -24,6 +24,7 @@ interface HomePageProps {
   onOpenReading?: () => void;
   onOpenPhraseBook?: () => void;
   onOpenSyncSettings?: () => void;
+  onOpenAbyss?: () => void;
 }
 
 export function HomePage({
@@ -32,6 +33,7 @@ export function HomePage({
   onOpenReading,
   onOpenPhraseBook,
   onOpenSyncSettings,
+  onOpenAbyss,
 }: HomePageProps) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -168,6 +170,25 @@ export function HomePage({
                 </div>
                 <div className="book-card-stats">
                   <span className="book-stat">手动输入单词，AI 补全释义</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 🦐 异世界入口 */}
+          {onOpenAbyss && (
+            <div
+              className="book-card book-card-nav book-card-abyss"
+              onClick={onOpenAbyss}
+              role="button"
+              tabIndex={0}
+            >
+              <div className="book-card-header">
+                <div className="book-card-title-row">
+                  <h2 className="book-card-title">🕳️ 异世界入口</h2>
+                </div>
+                <div className="book-card-stats">
+                  <span className="book-stat">深渊版 · 怪奇物语主题</span>
                 </div>
               </div>
             </div>
