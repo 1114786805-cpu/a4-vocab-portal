@@ -1,0 +1,4389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>异世界入口 · 深渊版</title>
+<script src="words-data.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+html, body { width: 100%; height: 100%; background: #050301; overflow: hidden; }
+
+canvas {
+  position: fixed; top: 0; left: 0;
+  pointer-events: none;
+}
+#particleCanvas { z-index: 10; pointer-events: auto; cursor: pointer; }
+#glowCanvas { z-index: 8; pointer-events: none; }
+#chromCanvas { z-index: 50; pointer-events: none; display: none; }
+
+/* 黑暗深渊背景 — 怪奇物语异世界入口 */
+.abyss-bg {
+  position: fixed; inset: 0; z-index: 0;
+  background-color: #050301;
+  pointer-events: none;
+}
+.abyss-bg img {
+  width: 100%; height: 100%; object-fit: cover;
+  display: block; filter: brightness(0.7) contrast(1.1);
+}
+
+/* 深渊边缘 — 像从洞穴内部看的轮廓 */
+.abyss-edge {
+  position: fixed; inset: 0; z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 55% 50% at 50% 47%,
+      transparent 35%,
+      rgba(200, 70, 30, 0.03) 45%,
+      rgba(150, 40, 15, 0.05) 55%,
+      rgba(80, 20, 8, 0.08) 65%,
+      rgba(30, 10, 5, 0.18) 75%,
+      rgba(10, 5, 3, 0.35) 85%,
+      transparent 95%
+    );
+  animation: edgePulse 5s ease-in-out infinite alternate;
+}
+
+@keyframes edgePulse {
+  0% { opacity: 0.7; }
+  100% { opacity: 1; filter: brightness(1.15); }
+}
+
+/* ======= 穿越洞穴入口动画 — 全沉浸版 ======= */
+
+/* 第1层：洞穴图从中心亮点展开 — 像贴近洞口往外看
+   改用 clip-path: inset + opacity + scale 三合一动画，纯GPU加速重写 */
+.cave-transition {
+  position: fixed; inset: 0; z-index: 20;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  opacity: 0;
+  background: #000;
+}
+.cave-transition img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+  transform-origin: center 43%;
+  clip-path: inset(50% 50% 50% 50% at 50% 43%);
+  transition: none;
+}
+.cave-transition.entering {
+  opacity: 1;
+}
+.cave-transition.entering img {
+  animation: caveImgExpand 1.0s cubic-bezier(0.20, 0.00, 0.00, 1.0) forwards;
+}
+
+@keyframes caveImgExpand {
+  0% {
+    clip-path: inset(50% 50% 50% 50% at 50% 43%);
+    transform: scale(1.5);
+    filter: brightness(0.08) saturate(0.1) contrast(0.9);
+  }
+  15% {
+    clip-path: inset(48% 48% 48% 48% at 50% 43%);
+    transform: scale(1.35);
+    filter: brightness(0.2) saturate(0.3) contrast(0.9);
+  }
+  35% {
+    clip-path: inset(35% 35% 35% 35% at 50% 43%);
+    transform: scale(1.15);
+    filter: brightness(0.5) saturate(0.6) contrast(0.95);
+  }
+  60% {
+    clip-path: inset(12% 10% 12% 10% at 50% 43%);
+    transform: scale(1.03);
+    filter: brightness(0.8) saturate(0.85) contrast(1.0);
+  }
+  85% {
+    clip-path: inset(3% 2% 3% 2% at 50% 43%);
+    transform: scale(1.0);
+    filter: brightness(0.95) saturate(0.95) contrast(1.0);
+  }
+  100% {
+    clip-path: inset(0% 0% 0% 0%);
+    transform: scale(1.0);
+    filter: brightness(1.0) saturate(1.0) contrast(1.0);
+  }
+}
+
+/* 第2层：色彩过渡遮罩 — 洞穴入口的暖橙色辉光逐渐铺满 */
+.cave-light-wash {
+  position: fixed; inset: 0; z-index: 21;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    ellipse 55% 45% at 50% 43%,
+    rgba(255, 120, 20, 0.25) 0%,
+    rgba(200, 60, 10, 0.12) 25%,
+    rgba(100, 30, 5, 0.06) 50%,
+    transparent 70%
+  );
+  mix-blend-mode: overlay;
+}
+.cave-light-wash.active {
+  animation: caveLightWash 1.0s ease forwards;
+}
+@keyframes caveLightWash {
+  0% { opacity: 0; }
+  10% { opacity: 0.5; }
+  35% { opacity: 1.0; }
+  70% { opacity: 0.75; }
+  100% { opacity: 0.55; }
+}
+
+/* 第3层：洞穴墙壁纹理微光 — 模拟被光照亮的岩壁细节慢慢浮现 */
+.cave-wall-glow {
+  position: fixed; inset: 0; z-index: 21;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(ellipse 40% 50% at 20% 50%, rgba(180, 80, 20, 0.04) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 50% at 80% 50%, rgba(120, 50, 15, 0.05) 0%, transparent 60%),
+    radial-gradient(ellipse 30% 50% at 50% 100%, rgba(60, 25, 8, 0.08) 0%, transparent 60%);
+}
+.cave-wall-glow.active {
+  animation: wallGlowIn 1.0s ease 0.1s forwards;
+}
+@keyframes wallGlowIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* 第4层：暗角遮罩 — 模拟走进洞穴深处，边缘逐渐被黑暗吞噬 */
+.cave-vignette {
+  position: fixed; inset: 0; z-index: 22;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    ellipse 60% 55% at 50% 43%,
+    transparent 35%,
+    rgba(0,0,0,0.15) 50%,
+    rgba(0,0,0,0.4) 65%,
+    rgba(0,0,0,0.7) 80%,
+    #000 95%
+  );
+}
+.cave-vignette.active {
+  animation: vignetteGrow 1.0s ease 0.08s forwards;
+}
+@keyframes vignetteGrow {
+  0% { opacity: 0; }
+  100% { opacity: 0.85; }
+}
+
+/* 第5层：眩晕扭曲波纹 — 穿越时的空间扭曲感 */
+.cave-warp-ripple {
+  position: fixed; inset: 0; z-index: 23;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.cave-warp-ripple.active {
+  opacity: 1;
+}
+.cave-warp-ripple canvas {
+  width: 100%; height: 100%;
+  display: block;
+}
+
+/* 第6层：暖光粒子漂浮（穿越洞穴内部时的发光尘埃） */
+.cave-dust-particles {
+  position: fixed; inset: 0; z-index: 22;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.cave-dust-particles.active {
+  opacity: 1;
+}
+.cave-dust-particles canvas {
+  width: 100%; height: 100%;
+  display: block;
+}
+
+/* 提示 */
+.portal-hint {
+  position: fixed; bottom: 30px; left: 50%;
+  transform: translateX(-50%); z-index: 60;
+  font-size: 0.65rem; letter-spacing: 6px;
+  color: rgba(200,170,140,0.15);
+  text-align: center;
+  pointer-events: none;
+  font-family: serif; font-style: italic;
+  text-shadow: 0 0 20px rgba(180,70,30,0.1);
+  transition: opacity 0.8s ease;
+}
+.portal-hint span {
+  display: inline-block;
+  animation: fadeSlow 5s ease-in-out infinite alternate;
+}
+.portal-hint.gone { opacity: 0; }
+@keyframes fadeSlow {
+  0% { opacity: 0.15; }
+  100% { opacity: 0.40; }
+}
+
+/* 过渡后彩灯墙相关 */
+.reveal-mask {
+  position: fixed; inset: 0; z-index: 25;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+}
+.reveal-mask.active {
+  opacity: 1;
+  background: rgba(0,0,0,0.4);
+}
+
+.img-frame {
+  position: fixed; inset: 0; z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.5s ease;
+}
+.img-frame img {
+  width: 100%; height: 100%; object-fit: cover;
+  display: block; image-rendering: auto;
+}
+
+/* entry-overlay 已废弃，由 #revealedOverlay 取代 */
+
+#revealedOverlay {
+  position: fixed; inset: 0; z-index: 35;
+  pointer-events: none;
+  display: none;
+}
+#revealedOverlay.showing {
+  display: block;
+  pointer-events: auto;
+}
+.no-pointer { pointer-events: none; }
+
+.reveal-row {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  pointer-events: auto;
+  cursor: pointer;
+  padding: 10px 18px;
+  border-radius: 10px;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.3s;
+}
+.reveal-row:hover {
+  transform: scale(1.08);
+  background: rgba(255,200,80,0.08);
+}
+.reveal-row-pos1 { left: 10%; top: 20%; transform: scale(1.3); transform-origin: left center; }
+.reveal-row-pos2 { left: 10%; top: 36%; transform: scale(1.3); transform-origin: left center; }
+.reveal-row-pos3 { left: 10%; top: 52%; transform: scale(1.3); transform-origin: left center; }
+.reveal-row-pos4 { left: 10%; top: 68%; transform: scale(1.3); transform-origin: left center; }
+
+/* 自定义词书区域 — 录入词书创建的独立词书 */
+.custom-books-section {
+  position: absolute; left: 10%; top: 78%;
+  display: flex; flex-direction: column; gap: 10px;
+  max-height: 22%;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+.custom-books-section::-webkit-scrollbar {
+  width: 2px;
+}
+.custom-books-section::-webkit-scrollbar-thumb {
+  background: rgba(255,200,80,0.1);
+  border-radius: 1px;
+}
+.custom-book-row {
+  display: flex;
+  align-items: center; justify-content: flex-start;
+  gap: 9px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.25s;
+  white-space: nowrap;
+  position: relative;
+}
+.custom-book-row:hover {
+  background: rgba(255,200,80,0.06);
+  transform: translateX(6px);
+}
+.custom-book-row-bulb {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: 'Courier New', 'Lucida Console', monospace;
+  font-weight: 900; font-size: 20px;
+  width: 30px; height: 36px;
+  color: rgba(245,230,200,0.7);
+  text-shadow: 0 0 4px rgba(255,200,50,0.5), 0 0 10px rgba(255,160,20,0.3);
+}
+.custom-book-row-title {
+  font-family: 'Courier New', 'Lucida Console', monospace;
+  font-size: 16px; letter-spacing: 4px;
+  color: rgba(245,230,200,0.55);
+  text-shadow: 0 0 6px rgba(255,200,50,0.2);
+}
+.custom-book-row-word-count {
+  font-size: 11px; letter-spacing: 2px;
+  color: rgba(200,170,140,0.3);
+  margin-left: 8px;
+}
+.custom-book-row-delete {
+  position: absolute; right: 6px;
+  font-size: 14px; color: rgba(200,170,140,0.15);
+  cursor: pointer; opacity: 0; transition: opacity 0.2s;
+  user-select: none;
+}
+.custom-book-row:hover .custom-book-row-delete { opacity: 1; }
+.custom-book-row-delete:hover { color: rgba(255,80,60,0.5); }
+.custom-books-section-label {
+  font-family: 'Courier New', monospace;
+  font-size: 11px; letter-spacing: 4px;
+  color: rgba(200,170,140,0.15);
+  margin-bottom: 2px;
+}
+
+.reveal-row .bulb { width: 42px; height: 42px; font-size: 24px; }
+
+.bulb {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Courier New', 'Lucida Console', monospace;
+  font-weight: 900;
+  color: #f5e6c8;
+  text-shadow: 0 0 6px rgba(255, 200, 50, 0.9), 0 0 14px rgba(255, 160, 20, 0.6), 0 0 30px rgba(255, 100, 10, 0.3);
+  transition: all 0.15s ease;
+}
+.bulb::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(255,200,80,0.15) 0%, rgba(255,120,30,0.05) 50%, transparent 70%);
+  z-index: -1;
+  animation: bulbPulse 3s ease-in-out infinite alternate;
+}
+.bulb.flicker-fast { animation: flickerF 0.25s infinite alternate; }
+.bulb.flicker-slow { animation: flickerS 1.2s infinite alternate; }
+.bulb.dark { color: #4a3520; text-shadow: 0 0 3px rgba(180,100,30,0.2); }
+.bulb.dark::before { opacity: 0.1; }
+
+@keyframes flickerF {
+  0% { opacity: 0.4; text-shadow: 0 0 3px rgba(255,200,80,0.2); }
+  100% { opacity: 1; text-shadow: 0 0 12px rgba(255,200,80,1), 0 0 30px rgba(255,180,60,0.5); }
+}
+@keyframes flickerS {
+  0% { opacity: 0.6; text-shadow: 0 0 5px rgba(255,200,80,0.3); }
+  100% { opacity: 1; text-shadow: 0 0 10px rgba(255,200,80,0.9), 0 0 25px rgba(255,180,60,0.4); }
+}
+@keyframes bulbLightOn {
+  0% { opacity: 0; transform: scale(0.3); filter: brightness(0.3); }
+  60% { transform: scale(1.15); filter: brightness(1.4); }
+  100% { opacity: 1; transform: scale(1); filter: brightness(1); }
+}
+.bulb.light-on { opacity: 0; transform: scale(0.5); animation: bulbLightOn 0.4s ease forwards; }
+@keyframes bulbPulse { 0% { opacity: 0.6; } 100% { opacity: 1; } }
+
+.reveal-subtitle {
+  position: fixed; bottom: 35px; left: 50%;
+  transform: translateX(-50%); z-index: 60;
+  color: rgba(255,200,80,0.35);
+  font-size: 14px; letter-spacing: 6px;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.5s ease;
+}
+.reveal-subtitle.show { opacity: 1; }
+
+/* 首页返回按钮 — 保持在底部右下角，低调但可点击 */
+.home-btn {
+  position: fixed; bottom: 32px; right: 40px; z-index: 60;
+  color: rgba(200,180,140,0.25);
+  font-size: 12px; letter-spacing: 4px;
+  cursor: pointer;
+  pointer-events: auto;
+  opacity: 0;
+  transition: opacity 0.6s ease, color 0.3s;
+  user-select: none;
+}
+.home-btn.show { opacity: 1; }
+.home-btn:hover { color: rgba(255,200,80,0.6); }
+
+/* 小词条入口 — 已废弃，由放大版 reveal-row 取代 */
+
+.bulb-char {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Courier New', 'Lucida Console', monospace;
+  font-weight: 900;
+  font-size: 22px; width: 38px; height: 48px;
+  color: #f5e6c8;
+  text-shadow: 0 0 6px rgba(255, 200, 50, 0.9), 0 0 14px rgba(255, 160, 20, 0.6), 0 0 30px rgba(255, 100, 10, 0.3);
+  transition: all 0.15s ease;
+  position: relative;
+}
+.bulb-char::before {
+  content: '';
+  position: absolute; inset: -2px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(255,200,80,0.12) 0%, rgba(255,120,30,0.04) 50%, transparent 70%);
+  z-index: -1;
+  animation: bulbPulse 3s ease-in-out infinite alternate;
+}
+
+@keyframes flickerFast {
+  0% { opacity: 1; text-shadow: 0 0 6px rgba(255,200,50,0.9), 0 0 14px rgba(255,160,20,0.6), 0 0 30px rgba(255,100,10,0.3); }
+  50% { opacity: 0.4; text-shadow: 0 0 2px rgba(255,200,50,0.2); }
+  100% { opacity: 1; text-shadow: 0 0 8px rgba(255,200,50,0.9), 0 0 18px rgba(255,160,20,0.6), 0 0 35px rgba(255,100,10,0.3); }
+}
+@keyframes flickerSlow {
+  0% { opacity: 1; } 30% { opacity: 0.8; } 40% { opacity: 0.3; } 50% { opacity: 0.9; } 100% { opacity: 1; }
+}
+/* ================================================================
+   篇目列表面板 — 阅读词汇篇目标题陈列
+   ================================================================ */
+
+.article-selector-panel {
+  position: fixed; inset: 0; z-index: 36;
+  pointer-events: none;
+  display: none;
+  background: rgba(5, 3, 1, 0.85);
+  backdrop-filter: blur(3px);
+}
+.article-selector-panel.showing {
+  display: block;
+  pointer-events: auto;
+}
+
+.article-selector-title {
+  position: absolute; top: 4%; left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Courier New', 'Lucida Console', monospace;
+  font-size: 22px; letter-spacing: 6px;
+  color: rgba(200, 170, 140, 0.5);
+  text-shadow: 0 0 15px rgba(200, 170, 140, 0.15);
+  pointer-events: none;
+}
+
+.article-new-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: 'Courier New', monospace;
+  font-size: 15px; letter-spacing: 3px;
+  color: rgba(255,200,80,0.35);
+  padding: 12px 22px;
+  margin-bottom: 6px;
+  border: 1px dashed rgba(255,200,80,0.12);
+  border-radius: 8px;
+  cursor: pointer; user-select: none;
+  transition: all 0.2s;
+  background: rgba(255,200,80,0.02);
+}
+.article-new-btn:hover {
+  color: rgba(255,200,80,0.7);
+  border-color: rgba(255,200,80,0.25);
+  background: rgba(255,200,80,0.05);
+}
+
+/* ===== 短语积累面板 ===== */
+.phrase-panel {
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(0,0,0,0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 95;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.5s;
+}
+.phrase-panel.showing { opacity: 1; pointer-events: auto; }
+.phrase-panel-inner {
+  width: 85vw; max-width: 700px; max-height: 78vh;
+  background: rgba(240,230,210,0.06);
+  border: 1px solid rgba(200,170,140,0.08);
+  border-radius: 14px;
+  padding: 28px 30px 20px;
+  display: flex; flex-direction: column;
+  gap: 16px;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+}
+.phrase-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.phrase-panel-title {
+  font-family: 'Courier New', monospace;
+  font-size: 22px; letter-spacing: 8px;
+  color: rgba(245,230,200,0.7);
+  text-shadow: 0 0 12px rgba(255,200,50,0.3);
+}
+.phrase-panel-count {
+  font-family: 'Courier New', monospace;
+  font-size: 13px; letter-spacing: 3px;
+  color: rgba(200,170,140,0.25);
+}
+.phrase-add-row {
+  display: flex; gap: 8px; align-items: stretch;
+}
+.phrase-add-input {
+  flex: 1;
+  background: rgba(0,0,0,0.2);
+  border: 1px solid rgba(200,170,140,0.08);
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-family: 'Courier New', monospace;
+  font-size: 16px; letter-spacing: 2px;
+  color: rgba(245,230,200,0.7);
+  outline: none;
+  transition: border-color 0.2s;
+}
+.phrase-add-input:focus { border-color: rgba(255,200,80,0.2); }
+.phrase-add-input::placeholder { color: rgba(200,170,140,0.15); }
+.phrase-add-btn, .phrase-ai-btn {
+  font-family: 'Courier New', monospace;
+  font-size: 14px; letter-spacing: 2px;
+  padding: 10px 18px; border-radius: 8px;
+  cursor: pointer; user-select: none;
+  transition: all 0.2s;
+  white-space: nowrap;
+  border: none;
+}
+.phrase-add-btn {
+  background: rgba(255,200,80,0.06);
+  color: rgba(255,200,80,0.5);
+  border: 1px solid rgba(255,200,80,0.08);
+}
+.phrase-add-btn:hover { background: rgba(255,200,80,0.12); color: rgba(255,200,80,0.7); }
+.phrase-ai-btn {
+  background: rgba(100,140,255,0.06);
+  color: rgba(140,170,255,0.5);
+  border: 1px solid rgba(100,140,255,0.08);
+}
+.phrase-ai-btn:hover { background: rgba(100,140,255,0.12); color: rgba(140,170,255,0.7); }
+.phrase-ai-btn:disabled { opacity: 0.25; cursor: default; }
+.phrase-list {
+  flex: 1; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 6px;
+  padding-right: 4px;
+}
+.phrase-list::-webkit-scrollbar { width: 2px; }
+.phrase-list::-webkit-scrollbar-thumb { background: rgba(255,200,80,0.06); border-radius: 1px; }
+.phrase-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+  border: 1px solid transparent;
+  position: relative;
+}
+.phrase-item:hover { background: rgba(255,200,80,0.03); border-color: rgba(200,170,140,0.04); }
+.phrase-item-main { flex: 1; min-width: 0; }
+.phrase-item-phrase {
+  font-family: 'Courier New', monospace;
+  font-size: 17px; letter-spacing: 2px;
+  color: rgba(245,230,200,0.65);
+  display: block;
+}
+.phrase-item-def {
+  font-size: 14px; letter-spacing: 1px;
+  color: rgba(200,170,140,0.4);
+  margin-top: 4px;
+  display: block;
+}
+.phrase-item-meta {
+  font-size: 11px; letter-spacing: 1px;
+  color: rgba(200,170,140,0.18);
+  margin-top: 3px;
+}
+.phrase-item-meta span { margin-right: 12px; }
+.phrase-item-delete {
+  font-size: 16px; color: rgba(200,170,140,0.1);
+  cursor: pointer; user-select: none;
+  padding: 2px 6px; opacity: 0; transition: opacity 0.2s;
+  align-self: center;
+}
+.phrase-item:hover .phrase-item-delete { opacity: 1; }
+.phrase-item-delete:hover { color: rgba(255,80,60,0.4); }
+.phrase-empty {
+  text-align: center; padding: 40px 20px;
+  font-family: 'Courier New', monospace;
+  font-size: 15px; letter-spacing: 3px;
+  color: rgba(200,170,140,0.15);
+}
+.phrase-close {
+  position: absolute; bottom: 20px; right: 30px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px; letter-spacing: 3px;
+  color: rgba(200,170,140,0.2);
+  cursor: pointer; user-select: none;
+  transition: color 0.2s;
+}
+.phrase-close:hover { color: rgba(255,200,80,0.5); }
+
+/* 短语编辑弹窗 */
+.phrase-edit-overlay {
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+}
+.phrase-edit-modal {
+  width: 85vw; max-width: 560px;
+  background: rgba(240,230,210,0.08);
+  border: 1px solid rgba(200,170,140,0.1);
+  border-radius: 14px;
+  padding: 24px;
+  display: flex; flex-direction: column; gap: 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.phrase-edit-title {
+  font-family: 'Courier New', monospace;
+  font-size: 18px; letter-spacing: 6px;
+  color: rgba(245,230,200,0.5);
+}
+.phrase-edit-label {
+  font-family: 'Courier New', monospace;
+  font-size: 12px; letter-spacing: 3px;
+  color: rgba(200,170,140,0.2);
+}
+.phrase-edit-input, .phrase-edit-textarea {
+  background: rgba(0,0,0,0.2);
+  border: 1px solid rgba(200,170,140,0.08);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-family: 'Courier New', monospace;
+  font-size: 15px; letter-spacing: 1px;
+  color: rgba(245,230,200,0.6);
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+}
+.phrase-edit-input:focus, .phrase-edit-textarea:focus { border-color: rgba(255,200,80,0.2); }
+.phrase-edit-textarea { min-height: 60px; font-size: 14px; }
+.phrase-edit-actions {
+  display: flex; gap: 10px; justify-content: flex-end;
+}
+.phrase-edit-btn {
+  font-family: 'Courier New', monospace;
+  font-size: 14px; letter-spacing: 2px;
+  padding: 10px 22px; border-radius: 8px;
+  cursor: pointer; user-select: none; border: none;
+  transition: all 0.2s;
+}
+.phrase-edit-btn.cancel {
+  background: rgba(200,170,140,0.04);
+  color: rgba(200,170,140,0.3);
+}
+.phrase-edit-btn.cancel:hover { background: rgba(200,170,140,0.08); }
+.phrase-edit-btn.save {
+  background: rgba(255,200,80,0.06);
+  color: rgba(255,200,80,0.5);
+  border: 1px solid rgba(255,200,80,0.1);
+}
+.phrase-edit-btn.save:hover { background: rgba(255,200,80,0.14); color: rgba(255,200,80,0.7); }
+
+.article-selector-close {
+  position: absolute; bottom: 8%; right: 8%;
+  font-family: 'Courier New', monospace;
+  font-size: 14px; letter-spacing: 3px;
+  color: rgba(200, 170, 140, 0.3);
+  cursor: pointer; user-select: none;
+  transition: color 0.2s;
+}
+.article-selector-close:hover {
+  color: rgba(255, 200, 80, 0.7);
+}
+
+.article-list {
+  position: absolute; top: 12%; left: 50%;
+  transform: translateX(-50%);
+  width: 70%; max-width: 700px;
+  display: flex; flex-direction: column;
+  gap: 8px;
+  padding: 10px 0;
+}
+
+.article-empty-hint {
+  font-family: 'Courier New', monospace;
+  font-size: 14px; letter-spacing: 3px;
+  color: rgba(200, 170, 140, 0.15);
+  text-align: center;
+  padding: 40px;
+}
+
+/* ================================================================
+   录入词书面板 — 输入篇目名与词汇
+   ================================================================ */
+
+.import-panel {
+  position: fixed; inset: 0; z-index: 37;
+  pointer-events: none;
+  display: none;
+  background: rgba(5, 3, 1, 0.88);
+  backdrop-filter: blur(4px);
+}
+.import-panel.showing {
+  display: block;
+  pointer-events: auto;
+}
+
+.import-title {
+  position: absolute; top: 3%; left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Courier New', monospace;
+  font-size: 22px; letter-spacing: 6px;
+  color: rgba(200, 170, 140, 0.5);
+  text-shadow: 0 0 15px rgba(200, 170, 140, 0.15);
+  pointer-events: none;
+}
+
+.import-form {
+  position: absolute; top: 12%; left: 50%;
+  transform: translateX(-50%);
+  width: 70%; max-width: 650px;
+  display: flex; flex-direction: column;
+  gap: 16px;
+}
+
+.import-label {
+  font-family: 'Courier New', monospace;
+  font-size: 13px; letter-spacing: 3px;
+  color: rgba(200, 170, 140, 0.35);
+  margin-bottom: -8px;
+}
+
+.import-input {
+  background: rgba(200, 170, 140, 0.06);
+  border: 1px solid rgba(200, 170, 140, 0.12);
+  color: rgba(200, 170, 140, 0.7);
+  font-family: 'Courier New', monospace;
+  font-size: 16px; letter-spacing: 2px;
+  padding: 14px 18px;
+  outline: none;
+  transition: border-color 0.2s;
+  width: 100%;
+}
+.import-input:focus {
+  border-color: rgba(255, 200, 80, 0.3);
+}
+.import-textarea {
+  background: rgba(200, 170, 140, 0.04);
+  border: 1px solid rgba(200, 170, 140, 0.1);
+  color: rgba(200, 170, 140, 0.6);
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  padding: 14px 18px;
+  outline: none;
+  min-height: 280px;
+  resize: vertical;
+  line-height: 1.8;
+  transition: border-color 0.2s;
+}
+.import-textarea:focus {
+  border-color: rgba(255, 200, 80, 0.25);
+}
+.import-textarea::placeholder {
+  color: rgba(200, 170, 140, 0.15);
+}
+
+.import-buttons {
+  display: flex; gap: 16px;
+  justify-content: center;
+}
+
+.import-btn {
+  font-family: 'Courier New', monospace;
+  font-size: 14px; letter-spacing: 4px;
+  padding: 12px 32px;
+  cursor: pointer;
+  border: 1px solid rgba(200, 170, 140, 0.15);
+  background: rgba(200, 170, 140, 0.05);
+  color: rgba(200, 170, 140, 0.5);
+  transition: all 0.2s;
+  user-select: none;
+}
+.import-btn:hover {
+  color: rgba(255, 200, 80, 0.7);
+  border-color: rgba(200, 170, 140, 0.3);
+  background: rgba(200, 170, 140, 0.08);
+}
+.import-btn-primary {
+  color: rgba(255, 200, 80, 0.3);
+  border-color: rgba(255, 200, 80, 0.08);
+}
+.import-btn-primary:hover {
+  color: rgba(255, 200, 80, 0.8);
+  border-color: rgba(255, 200, 80, 0.2);
+  background: rgba(255, 200, 80, 0.03);
+}
+
+.import-close {
+  position: absolute; bottom: 8%; right: 8%;
+  font-family: 'Courier New', monospace;
+  font-size: 14px; letter-spacing: 3px;
+  color: rgba(200, 170, 140, 0.3);
+  cursor: pointer; user-select: none;
+  transition: color 0.2s;
+}
+.import-close:hover {
+  color: rgba(255, 200, 80, 0.7);
+}
+
+/* 录入词书 — 词 tag 标签 */
+.word-tag {
+  display:inline-flex;align-items:center;gap:6px;
+  padding:6px 12px;
+  font-family:'Courier New',monospace;font-size:13px;letter-spacing:2px;
+  color:rgba(200,170,140,0.7);
+  background:rgba(200,170,140,0.08);
+  border:1px solid rgba(200,170,140,0.1);
+  transition:all 0.2s;
+}
+.word-tag:hover {
+  background:rgba(200,170,140,0.12);
+  border-color:rgba(200,170,140,0.2);
+}
+.word-tag-remove {
+  cursor:pointer;font-size:16px;line-height:1;color:rgba(200,170,140,0.25);
+  transition:color 0.15s;
+}
+.word-tag-remove:hover { color:rgba(255,100,80,0.7); }
+
+/* 录入结果项 */
+.import-result-item {
+  padding:10px 14px;margin-bottom:6px;
+  border:1px solid rgba(200,170,140,0.06);
+  background:rgba(200,170,140,0.02);
+}
+.import-result-item.success { border-left:2px solid rgba(100,220,80,0.3); }
+.import-result-item.fail { border-left:2px solid rgba(231,76,60,0.3); }
+.import-result-header {
+  display:flex;align-items:center;gap:10px;
+  margin-bottom:4px;
+}
+.import-result-word {
+  font-family:'Courier New',monospace;font-size:15px;letter-spacing:1px;
+  color:rgba(255,200,80,0.5);
+}
+.import-result-body {
+  font-size:12px;letter-spacing:1px;
+  color:rgba(200,170,140,0.35);
+  line-height:1.6;
+}
+.import-result-body span { display:inline; }
+.import-result-body .phonetic {
+  color:rgba(200,170,140,0.2);margin-right:8px;
+}
+.import-result-body .pos {
+  color:rgba(200,170,140,0.25);margin-right:8px;
+}
+.import-result-body .def {
+  color:rgba(200,170,140,0.45);
+}
+
+/* 篇目列表 — 卡片式（点击学习 + 管理按钮） */
+.article-item {
+  display:flex;align-items:center;gap:16px;
+  font-family:'Courier New',monospace;
+  font-size:18px;letter-spacing:4px;
+  color:rgba(200,170,140,0.6);
+  padding:14px 20px;
+  cursor:pointer;
+  border:1px solid rgba(200,170,140,0.08);
+  background:rgba(200,170,140,0.03);
+  transition:all 0.25s;
+}
+.article-item:hover {
+  color:rgba(255,200,80,0.8);
+  background:rgba(200,170,140,0.08);
+  border-color:rgba(200,170,140,0.2);
+}
+.article-item-info {
+  flex:1;min-width:0;
+}
+.article-item-title {
+  font-size:18px;letter-spacing:4px;
+}
+.article-item-meta {
+  display:block;
+  font-size:11px;letter-spacing:2px;
+  color:rgba(200,170,140,0.2);
+  margin-top:3px;
+}
+.article-item-actions {
+  display:flex;gap:6px;flex-shrink:0;
+}
+.article-action-btn {
+  font-family:'Courier New',monospace;
+  font-size:14px;letter-spacing:2px;
+  padding:6px 12px;
+  cursor:pointer;
+  border:1px solid rgba(200,170,140,0.1);
+  background:rgba(200,170,140,0.04);
+  color:rgba(200,170,140,0.35);
+  transition:all 0.2s;
+  user-select:none;
+}
+.article-action-btn:hover {
+  color:rgba(255,200,80,0.7);
+  border-color:rgba(200,170,140,0.25);
+  background:rgba(200,170,140,0.08);
+}
+.article-action-btn.danger:hover {
+  color:rgba(255,80,60,0.6);
+  border-color:rgba(231,76,60,0.15);
+}
+
+/* ================================================================
+   灯带页码面板 — 卧室墙投影式
+   ================================================================ */
+
+.page-selector-panel {
+  position: fixed; inset: 0; z-index: 36;
+  pointer-events: none;
+  display: none;
+  background: rgba(5, 3, 1, 0.25);
+  backdrop-filter: blur(2px);
+}
+.page-selector-panel.showing {
+  display: block;
+  pointer-events: auto;
+}
+
+/* 灯带标题 */
+.page-selector-title {
+  position: absolute; top: 3%; left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Courier New', 'Lucida Console', monospace;
+  font-size: 26px; letter-spacing: 6px;
+  color: rgba(245, 230, 200, 0.6);
+  text-shadow: 0 0 10px rgba(255, 200, 80, 0.3);
+  text-align: center;
+  pointer-events: none;
+}
+.page-selector-title small {
+  display: block;
+  font-size: 12px; letter-spacing: 3px;
+  color: rgba(200, 170, 140, 0.3);
+  margin-top: 8px;
+}
+
+/* 灯带网格容器 */
+.page-grid {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  grid-template-columns: repeat(10, 66px);
+  grid-template-rows: repeat(12, 60px);
+  gap: 12px;
+  padding: 16px 20px;
+  pointer-events: auto;
+}
+
+/* 单个页码灯泡 */
+.page-bulb {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 66px; height: 60px;
+  font-family: 'Courier New', 'Lucida Console', monospace;
+  font-size: 20px; font-weight: 700;
+  color: #4a3520;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+.page-bulb::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 6px;
+  background: radial-gradient(ellipse, rgba(255,200,80,0.04) 0%, transparent 70%);
+  z-index: -1;
+  transition: background 0.2s ease;
+}
+.page-bulb:hover {
+  color: #f5e6c8;
+  text-shadow: 0 0 8px rgba(255, 200, 50, 0.6), 0 0 16px rgba(255, 160, 20, 0.4);
+  transform: scale(1.15);
+}
+.page-bulb:hover::before {
+  background: radial-gradient(ellipse, rgba(255,200,80,0.15) 0%, transparent 70%);
+}
+.page-bulb.selected {
+  color: #fff5dc;
+  text-shadow: 0 0 12px rgba(255, 200, 50, 1), 0 0 30px rgba(255, 180, 60, 0.5), 0 0 50px rgba(255, 140, 30, 0.3);
+}
+.page-bulb.selected::before {
+  background: radial-gradient(ellipse, rgba(255,200,80,0.3) 0%, rgba(255,120,30,0.08) 50%, transparent 70%);
+}
+
+/* 学完的页码 — 灯泡常亮效果 */
+.page-bulb.completed {
+  color: #a8f0a0;
+  text-shadow: 0 0 8px rgba(100, 220, 80, 0.5), 0 0 20px rgba(60, 200, 40, 0.25);
+}
+.page-bulb.completed::before {
+  background: radial-gradient(ellipse, rgba(100,220,80,0.15) 0%, rgba(60,200,40,0.05) 50%, transparent 70%);
+}
+.page-bulb.completed:hover {
+  color: #c8ffc0;
+  text-shadow: 0 0 12px rgba(100, 220, 80, 0.8), 0 0 30px rgba(60, 200, 40, 0.4);
+}
+/* 🦐 继续上次 — 高亮未完成页 */
+.page-bulb.resume-page {
+    border-color: rgba(255,200,80,0.6) !important;
+    box-shadow: 0 0 16px rgba(255,200,80,0.3), inset 0 0 12px rgba(255,200,80,0.15) !important;
+    animation: resumePulse 1.5s infinite;
+}
+@keyframes resumePulse {
+    0%, 100% { box-shadow: 0 0 16px rgba(255,200,80,0.3), inset 0 0 12px rgba(255,200,80,0.15); }
+    50% { box-shadow: 0 0 28px rgba(255,200,80,0.6), inset 0 0 20px rgba(255,200,80,0.25); }
+}
+@keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 12px rgba(255,200,80,0.2); }
+    50% { box-shadow: 0 0 24px rgba(255,200,80,0.5); }
+}
+
+/* 灯带关闭按钮 */
+.page-selector-close {
+  position: absolute; bottom: 10%; right: 8%;
+  font-family: 'Courier New', monospace;
+  font-size: 14px; letter-spacing: 3px;
+  color: rgba(200, 170, 140, 0.35);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: color 0.2s;
+  user-select: none;
+}
+.page-selector-close:hover {
+  color: rgba(255, 200, 80, 0.7);
+}
+
+/* 灯带返回按钮（← 返回词书） */
+.page-selector-back {
+  position: absolute; top: 12%; left: 6%;
+  font-family: 'Courier New', monospace;
+  font-size: 14px; letter-spacing: 3px;
+  color: rgba(200, 170, 140, 0.4);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: color 0.2s;
+  user-select: none;
+}
+.page-selector-back:hover {
+  color: rgba(255, 200, 80, 0.7);
+}
+
+/* ================================================================
+   学习面板 — 卧室墙面投影式
+   ================================================================ */
+
+.learn-panel {
+  position: fixed; inset: 0; z-index: 37;
+  pointer-events: none;
+  display: none;
+  background: rgba(5, 3, 1, 0.15);
+}
+.learn-panel.showing {
+  display: block;
+  pointer-events: auto;
+}
+
+/* 学习内容容器 — 全屏上下两段式：上半工作区 + 下半 A4 纸 */
+.learn-content {
+  position: absolute;
+  top: 2vh; left: 50%;
+  transform: translateX(-50%);
+  width: min(1000px, 96vw);
+  height: 95vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0 20px;
+  background: rgba(20, 15, 10, 0.15);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 200, 80, 0.06);
+  border-radius: 12px;
+  box-shadow: 0 0 40px rgba(0,0,0,0.3);
+  pointer-events: auto;
+  color: #f5e6c8;
+  font-family: 'Georgia', 'Noto Serif SC', serif;
+}
+
+/* 工作区 — 上半部分，紧凑展示当前词 */
+#learnStageArea {
+  flex-shrink: 0;
+  min-height: 90px;
+  padding: 8px 16px 4px;
+}
+
+/* 学习进度条 */
+.learn-progress {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: rgba(255,200,80,0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  z-index: 5;
+}
+.learn-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, rgba(255,180,60,0.5), rgba(255,200,80,0.8));
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* 学习面板返回 */
+.learn-back-link {
+  position: absolute; top: 10px; left: 16px;
+  font-size: 13px; letter-spacing: 2px;
+  color: rgba(200, 170, 140, 0.4);
+  cursor: pointer;
+  transition: color 0.2s;
+  user-select: none;
+  z-index: 5;
+}
+.learn-back-link:hover {
+  color: rgba(255, 200, 80, 0.7);
+}
+
+/* WordCard — 单词卡片 (墙面投影风格) */
+.word-card {
+  text-align: center;
+  padding: 30px 20px 20px;
+}
+.word-card .word-text {
+  font-size: 42px; font-weight: 700;
+  color: #f5e6c8;
+  text-shadow: 0 0 20px rgba(255, 200, 80, 0.3), 0 0 40px rgba(255, 160, 40, 0.15);
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+}
+.word-card .word-phonetic {
+  font-size: 18px; color: rgba(200, 170, 140, 0.5);
+  margin-bottom: 6px;
+  font-style: italic;
+}
+.word-card .word-pos {
+  font-size: 14px; color: rgba(200, 170, 140, 0.4);
+  margin-bottom: 10px;
+}
+.word-card .word-definition {
+  font-size: 18px; color: rgba(245, 230, 200, 0.8);
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+.word-card .word-core-concept {
+  font-size: 16px; color: rgba(255, 200, 80, 0.5);
+  font-style: italic;
+  border-top: 1px solid rgba(255,200,80,0.1);
+  padding-top: 16px;
+  margin-bottom: 20px;
+}
+.word-card .collocations {
+  font-size: 13px; color: rgba(200, 170, 140, 0.4);
+  margin-bottom: 16px;
+}
+.word-card .collocations span {
+  display: inline-block;
+  background: rgba(255,200,80,0.06);
+  padding: 2px 10px;
+  border-radius: 10px;
+  margin: 2px 4px;
+  font-family: 'Courier New', monospace;
+}
+
+/* 学习阶段标注 */
+.learn-phase-badge {
+  display: inline-block;
+  font-size: 11px; letter-spacing: 2px;
+  color: rgba(200, 170, 140, 0.3);
+  border: 1px solid rgba(200,170,140,0.12);
+  border-radius: 12px;
+  padding: 3px 12px;
+  margin-bottom: 20px;
+}
+
+/* 按钮样式（发光/半透明） */
+.learn-btn {
+  display: inline-block;
+  padding: 10px 30px;
+  font-size: 15px;
+  font-family: 'Georgia', serif;
+  color: rgba(245, 230, 200, 0.7);
+  background: rgba(255, 200, 80, 0.06);
+  border: 1px solid rgba(255, 200, 80, 0.12);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+.learn-btn:hover {
+  color: #f5e6c8;
+  background: rgba(255, 200, 80, 0.12);
+  border-color: rgba(255, 200, 80, 0.3);
+  box-shadow: 0 0 16px rgba(255, 160, 40, 0.2);
+}
+
+/* 回忆输入区 */
+.recall-area {
+  text-align: center;
+  padding: 20px;
+}
+.recall-area .recall-label {
+  font-size: 15px; color: rgba(200, 170, 140, 0.5);
+  margin-bottom: 16px;
+  letter-spacing: 2px;
+}
+.recall-area .recall-word {
+  font-size: 32px; font-weight: 700;
+  color: #f5e6c8;
+  text-shadow: 0 0 16px rgba(255, 200, 80, 0.25);
+  margin-bottom: 20px;
+}
+.recall-input-group {
+  display: flex; align-items: center; gap: 12px;
+  justify-content: center;
+}
+.recall-input-group input {
+  width: 320px; max-width: 70vw;
+  padding: 10px 16px;
+  font-size: 16px;
+  background: rgba(20, 15, 10, 0.5);
+  border: 1px solid rgba(255, 200, 80, 0.15);
+  border-radius: 8px;
+  color: #f5e6c8;
+  outline: none;
+  transition: border-color 0.2s;
+  font-family: 'Georgia', serif;
+}
+.recall-input-group input:focus {
+  border-color: rgba(255, 200, 80, 0.4);
+  box-shadow: 0 0 12px rgba(255, 160, 40, 0.15);
+}
+.recall-input-group input::placeholder {
+  color: rgba(200, 170, 140, 0.25);
+}
+.recall-hint {
+  font-size: 12px; color: rgba(200, 170, 140, 0.3);
+  margin-top: 12px;
+}
+
+/* 判断结果 */
+.judgment-result {
+  text-align: center;
+  padding: 20px;
+}
+.judgment-result .result-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+.judgment-result .result-icon.correct { color: #6fcf97; text-shadow: 0 0 20px rgba(111,207,151,0.4); }
+.judgment-result .result-icon.wrong { color: #e74c3c; text-shadow: 0 0 20px rgba(231,76,60,0.4); }
+.judgment-result .result-text {
+  font-size: 18px; color: rgba(245, 230, 200, 0.8);
+  margin-bottom: 6px;
+}
+.judgment-result .result-detail {
+  font-size: 14px; color: rgba(200, 170, 140, 0.5);
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+.judgment-result .correct-answer {
+  font-size: 16px; color: rgba(255, 200, 80, 0.7);
+  margin-bottom: 20px;
+}
+.judgment-result .correct-def {
+  font-size: 13px; color: rgba(200, 170, 140, 0.5);
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+/* 完成页 */
+.page-done-view {
+  text-align: center;
+  padding: 30px;
+}
+.page-done-view .done-icon {
+  font-size: 56px;
+  color: rgba(255, 200, 80, 0.6);
+  text-shadow: 0 0 30px rgba(255, 200, 80, 0.3);
+  margin-bottom: 12px;
+}
+.page-done-view .done-text {
+  font-size: 22px; letter-spacing: 3px;
+  color: rgba(245, 230, 200, 0.7);
+  margin-bottom: 8px;
+}
+.page-done-view .done-sub {
+  font-size: 14px; color: rgba(200, 170, 140, 0.4);
+  margin-bottom: 24px;
+}
+
+/* 返回词书按钮（学习面板底部） */
+.learn-panel .back-to-lamp {
+  position: absolute; bottom: 6px; left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px; letter-spacing: 2px;
+  color: rgba(200, 170, 140, 0.25);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: color 0.2s;
+  z-index: 5;
+}
+.learn-panel .back-to-lamp:hover {
+  color: rgba(255, 200, 80, 0.5);
+}
+
+/* 发音按钮 */
+.speak-btn-learn {
+  display: inline-block;
+  margin-left: 8px;
+  cursor: pointer;
+  font-size: 18px;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+  user-select: none;
+}
+.speak-btn-learn:hover {
+  opacity: 1;
+}
+
+/* ================================================================
+   A4 纸 — 下半部分，5组×5词全部摊开在纸上
+   ================================================================ */
+.a4-paper-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 6px 0 16px;
+  min-height: 180px;
+}
+
+.a4-paper {
+  position: relative;
+  width: min(940px, 100%);
+  background: rgba(250, 247, 242, 0.90);
+  border-radius: 3px;
+  box-shadow:
+    0 1px 3px rgba(0,0,0,0.12),
+    0 4px 12px rgba(0,0,0,0.08),
+    0 8px 24px rgba(0,0,0,0.06);
+  padding: 28px 36px 32px;
+  overflow: hidden;
+}
+
+/* Upside Down 纹理 — 可见暗影 */
+.a4-paper::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url('stranger-things-bg.jpg') center/cover no-repeat;
+  opacity: 0.15;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* 纸张微纹 */
+.a4-paper::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(180,160,140,0.03) 2px,
+    rgba(180,160,140,0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+.a4-header-slim {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.a4-header-count {
+  font-size: 11px;
+  color: #aaa;
+  font-family: 'Georgia', serif;
+  letter-spacing: 1px;
+}
+
+.a4-body {
+  position: relative;
+  z-index: 2;
+}
+
+.a4-group {
+  margin-bottom: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+
+.a4-group.current {
+  background: rgba(255, 190, 60, 0.12);
+  box-shadow: 0 0 0 1px rgba(255, 180, 40, 0.15);
+}
+
+.a4-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.a4-row-shift {
+  padding-left: 6%;
+  padding-right: 6%;
+  justify-content: center;
+}
+
+.a4-shift-inner {
+  display: flex;
+  gap: 16px;
+  width: 66.66%;
+}
+
+.a4-slot {
+  flex: 1;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  border-radius: 4px;
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-size: 17px;
+  color: #333;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.a4-slot.filled {
+  background: rgba(0,0,0,0.02);
+  border: 1px solid rgba(0,0,0,0.06);
+}
+
+.a4-slot.empty {
+  border: 1px dashed rgba(0,0,0,0.08);
+}
+
+.a4-slot.filled .a4-slot-text {
+  letter-spacing: 0.5px;
+}
+
+/* 复习标记点 */
+.a4-slot-dot {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.a4-slot-correct .a4-slot-dot-correct {
+  background: #6fcf97;
+  box-shadow: 0 0 4px rgba(111,207,151,0.5);
+}
+
+.a4-slot-wrong .a4-slot-dot-wrong {
+  background: #e74c3c;
+  box-shadow: 0 0 4px rgba(231,76,60,0.5);
+}
+
+/* 复习阶段答错悬停提示 */
+.a4-slot-wrong:hover {
+  cursor: help;
+  box-shadow: 0 0 0 1px rgba(231,76,60,0.2);
+}
+
+/* 书写输入框 */
+.a4-slot-input-wrapper {
+  padding: 0;
+  position: relative;
+}
+
+.a4-input-lang-hint {
+  position: absolute;
+  top: -14px;
+  right: 2px;
+  font-size: 9px;
+  color: #aaa;
+  letter-spacing: 1px;
+  z-index: 3;
+}
+
+.a4-slot-input {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 17px;
+  font-family: 'Georgia', 'Times New Roman', serif;
+  border: 1px solid rgba(255, 180, 40, 0.5);
+  border-radius: 4px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.95);
+  color: #333;
+  text-align: center;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  position: relative;
+  z-index: 3;
+}
+
+.a4-slot-input:focus {
+  border-color: rgba(255, 180, 40, 0.8);
+  box-shadow: 0 0 10px rgba(255, 180, 40, 0.25);
+}
+
+.a4-slot-input.error {
+  border-color: rgba(231,76,60,0.5);
+  box-shadow: 0 0 8px rgba(231,76,60,0.2);
+}
+
+.a4-spelling-error {
+  position: absolute;
+  bottom: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: #c0392b;
+  white-space: nowrap;
+  z-index: 3;
+  font-family: 'Georgia', serif;
+  background: rgba(255,255,255,0.9);
+  padding: 1px 8px;
+  border-radius: 3px;
+}
+
+/* 书写阶段工作区提示 */
+.write-to-a4-label {
+  font-size: 13px;
+  color: rgba(200, 170, 140, 0.5);
+  letter-spacing: 2px;
+  margin-bottom: 6px;
+}
+
+.write-to-a4-label .input-lang-badge {
+  font-size: 10px;
+  background: rgba(255,200,80,0.1);
+  border: 1px solid rgba(255,200,80,0.2);
+  border-radius: 3px;
+  padding: 1px 6px;
+  margin-left: 6px;
+}
+
+.word-to-write {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.write-word-english {
+  font-size: 28px;
+  font-weight: 700;
+  color: #f5e6c8;
+  text-shadow: 0 0 12px rgba(255, 200, 80, 0.2);
+}
+
+.write-word-pos {
+  font-size: 13px;
+  color: rgba(200, 170, 140, 0.5);
+}
+
+.write-word-def {
+  font-size: 16px;
+  color: rgba(245, 230, 200, 0.8);
+}
+
+.write-to-a4-hint {
+  font-size: 12px;
+  color: rgba(200, 170, 140, 0.35);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+}
+
+.progress-badge {
+  font-size: 11px;
+  background: rgba(255,200,80,0.08);
+  border: 1px solid rgba(255,200,80,0.12);
+  border-radius: 10px;
+  padding: 1px 10px;
+  letter-spacing: 1px;
+}
+
+</style>
+</head>
+<body>
+
+<svg class="hidden-svg">
+  <filter id="chromatic">
+    <feOffset in="SourceGraphic" dx="4" dy="0" result="red-shift"/>
+    <feColorMatrix in="red-shift" result="red-only" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/>
+    <feOffset in="SourceGraphic" dx="-4" dy="0" result="blue-shift"/>
+    <feColorMatrix in="blue-shift" result="blue-only" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"/>
+    <feOffset in="SourceGraphic" dx="0" dy="0" result="green-only"/>
+    <feColorMatrix in="green-only" result="green-copy" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0"/>
+    <feBlend mode="screen" in="red-only" in2="green-copy" result="rg"/>
+    <feBlend mode="screen" in="rg" in2="blue-only"/>
+  </filter>
+</svg>
+
+<!-- 黑暗深渊背景 — 怪奇物语异世界入口 -->
+<div class="abyss-bg">
+  <img id="abyssImg" src="Gemini_Generated_Image_wo0n27wo0n27wo0n.jpg" alt="异世界入口">
+</div>
+<div class="abyss-edge"></div>
+
+<!-- 穿越洞穴入口动画层 — 全沉浸多层叠加 -->
+<div class="cave-transition" id="caveTransition">
+  <img id="caveImg" src="微信图片_20260724173056_843_17.jpg" alt="洞穴入口">
+</div>
+<div class="cave-light-wash" id="caveLightWash"></div>
+<div class="cave-wall-glow" id="caveWallGlow"></div>
+<div class="cave-vignette" id="caveVignette"></div>
+<div class="cave-warp-ripple" id="caveWarpRipple"><canvas id="rippleCanvas"></canvas></div>
+<div class="cave-dust-particles" id="caveDustCanvas"><canvas id="dustCanvas"></canvas></div>
+
+<!-- 词条入口 — 彩灯字母（已废弃：保留结构但清空，因为放大版取代了它） -->
+<div class="entry-overlay" id="entryOverlay"></div>
+
+<!-- 卧室背景图（过渡后显示） -->
+<div class="img-frame">
+  <img id="wallImg" src="" alt="">
+</div>
+
+<!-- 遮罩 — 过渡后变暗 -->
+<div class="reveal-mask" id="revealMask"></div>
+
+<!-- 过渡后放大的词条 -->
+<div class="no-pointer" id="revealedOverlay">
+  <div class="reveal-row reveal-row-pos1" id="revealEntry1"></div>
+  <div class="reveal-row reveal-row-pos2" id="revealEntry2"></div>
+  <div class="reveal-row reveal-row-pos3" id="revealEntry3"></div>
+  <div class="reveal-row reveal-row-pos4" id="revealEntry4"></div>
+  <div class="custom-books-section-label">— 我的词书 —</div>
+  <div class="custom-books-section" id="customBooksSection"></div>
+</div>
+
+<div class="reveal-subtitle" id="revealSubtitle">✦ 点击词书开始学习 ✦</div>
+<div class="home-btn" id="homeBtn">✦ 返回首页 ✦</div>
+
+<!-- Canvas -->
+<canvas id="glowCanvas"></canvas>
+<canvas id="particleCanvas"></canvas>
+
+
+<!-- 阅读篇目列表面板 -->
+<div class="article-selector-panel" id="articleSelector">
+  <div class="article-selector-title">选 择 阅 读 篇 目</div>
+  <div class="article-list" id="articleList"></div>
+  <div class="article-selector-close" id="articleSelectorClose">✕ 关闭</div>
+</div>
+
+<!-- 录入词书面板 — 逐词录入 + AI 补全 -->
+<div class="import-panel" id="importPanel">
+  <div class="import-title">录 入 篇 目</div>
+  <div class="import-form" id="importFormMain">
+
+    <!-- 第一步：输入标题 -->
+    <div id="importStepTitle">
+      <div class="import-label">篇 目 名 称</div>
+      <input class="import-input" id="importArticleName" placeholder="输入篇目标题..." />
+      <div class="import-buttons" style="margin-top:12px;">
+        <div class="import-btn import-btn-primary" id="importNextStepBtn">✓ 下 一 步</div>
+        <div class="import-btn" id="importCancelBtn">✕ 取 消</div>
+      </div>
+    </div>
+
+    <!-- 第二步：逐词录入 + AI 补全（隐藏） -->
+    <div id="importStepWords" style="display:none;">
+      <div class="import-label" id="importCurrentArticleTitle" style="color:rgba(255,200,80,0.6);font-size:15px;">篇目标题</div>
+      <div class="import-label" style="margin-top:12px;">单 词 录 入</div>
+
+      <div style="display:flex;gap:8px;align-items:stretch;">
+        <input class="import-input" id="importWordInput" placeholder="输入英文单词，按 Enter 添加..."
+          style="flex:1;"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();handleAddWord();}" />
+        <div class="import-btn" id="importAddWordBtn" style="padding:12px 20px;white-space:nowrap;">添加</div>
+      </div>
+
+      <!-- 已录入单词标签 -->
+      <div id="importWordTags" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;min-height:36px;"></div>
+
+      <div class="import-buttons" style="margin-top:12px;">
+        <div class="import-btn import-btn-primary" id="importStartAIBtn">🤖 AI 一键补全（0 词）</div>
+        <div class="import-btn" id="importBackToTitleBtn">← 修改标题</div>
+      </div>
+
+      <!-- AI 补全进度（隐藏） -->
+      <div id="importAIProgress" style="display:none;margin-top:16px;">
+        <div class="import-label">AI 补全中...</div>
+        <div style="height:4px;background:rgba(200,170,140,0.1);border-radius:2px;margin:8px 0;overflow:hidden;">
+          <div id="importAIProgressBar" style="height:100%;width:0%;background:rgba(255,200,80,0.4);transition:width 0.3s;"></div>
+        </div>
+        <div class="import-label" id="importAIProgressText" style="font-size:12px;">0 / 0</div>
+      </div>
+
+      <!-- 补全结果（隐藏） -->
+      <div id="importAIResults" style="display:none;margin-top:16px;max-height:280px;overflow-y:auto;">
+        <div class="import-label" id="importResultSummary">✅ 成功: 0 个 · ❌ 失败: 0 个</div>
+        <div id="importResultList"></div>
+        <div class="import-buttons" style="margin-top:12px;">
+          <div class="import-btn import-btn-primary" id="importSaveBtn">💾 保 存 到 阅 读 生 词 簿</div>
+          <div class="import-btn" id="importContinueAddBtn">+ 继续录入</div>
+        </div>
+      </div>
+
+      <!-- 保存成功确认（隐藏） -->
+      <div id="importDone" style="display:none;margin-top:16px;">
+        <div class="import-label" style="text-align:center;font-size:18px;color:rgba(100,220,80,0.6);margin-bottom:12px;">✅ 录入完成！</div>
+        <div class="import-buttons">
+          <div class="import-btn import-btn-primary" id="importDoneBackBtn">✓ 确认</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <div class="import-close" id="importClose">✕ 关闭</div>
+</div>
+
+<!-- 短语积累面板 -->
+<div class="phrase-panel" id="phrasePanel">
+  <div class="phrase-panel-inner">
+    <div class="phrase-panel-header">
+      <span class="phrase-panel-title">短 语 积 累 本</span>
+      <span class="phrase-panel-count" id="phraseCount">0 条</span>
+    </div>
+    <div class="phrase-add-row">
+      <input class="phrase-add-input" id="phraseInput" placeholder="输入短语，按 Enter 添加..."
+        onkeydown="if(event.key==='Enter'){event.preventDefault();handleAddPhrase();}" />
+      <button class="phrase-ai-btn" id="phraseAiBtn" onclick="handleAiCompletePhrase()">✨ AI</button>
+      <button class="phrase-add-btn" id="phraseAddBtn" onclick="handleAddPhrase()">+ 添加</button>
+    </div>
+    <div class="phrase-list" id="phraseList"></div>
+    <div class="phrase-close" id="phraseClose">✕ 关闭</div>
+  </div>
+</div>
+
+<!-- 灯带页码面板 -->
+<div class="page-selector-panel" id="pageSelector">
+  <div class="page-selector-title" id="pageSelectorTitle">
+    选 择 页 码
+    <small>点击灯泡进入该页学习</small>
+  </div>
+  <div class="page-selector-back" id="pageSelectorBack">← 返回篇目</div>
+  <div class="page-grid" id="pageGrid"></div>
+  <div class="page-selector-close" id="pageSelectorClose">✕ 关闭</div>
+</div>
+
+<!-- 学习面板 -->
+<div class="learn-panel" id="learnPanel">
+  <div class="learn-content" id="learnContent">
+    <div class="learn-progress">
+      <div class="learn-progress-bar" id="learnProgressBar"></div>
+    </div>
+    <div class="learn-back-link" id="learnBackLink">← 返回页码</div>
+    <div id="learnStageArea"></div>
+    <div class="a4-paper-wrapper" id="a4PaperWrapper">
+      <div class="a4-paper" id="a4PaperEl">
+        <div class="a4-header-slim"><span class="a4-header-count" id="a4WordCount">0 / 25</span></div>
+        <div class="a4-body" id="a4Body"></div>
+      </div>
+    </div>
+  </div>
+  <div class="back-to-lamp" id="learnBackToLamp">← 返回词书选择</div>
+</div>
+
+
+<div class="portal-hint"><span id="hintText">✦ 触碰入口 · 聆听深渊 ✦</span></div>
+
+<script>
+// =====================================================
+//  词条入口 — 彩灯字母生成
+// =====================================================
+// createBulbWord 已废弃，只用 createBigBulbRow
+
+function createBigBulbRow(text, containerId) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  text.split('').forEach((ch, i) => {
+    const span = document.createElement('span');
+    span.className = 'bulb light-on';
+    span.textContent = ch;
+    span.style.animationDelay = (0.3 + i * 0.06) + 's';
+    const r = Math.random();
+    if (r < 0.10) span.classList.add('flicker-fast');
+    else if (r < 0.25) span.classList.add('flicker-slow');
+    else if (r < 0.30) span.classList.add('dark');
+    container.appendChild(span);
+  });
+}
+
+createBigBulbRow('雅 思 词 汇 真 经', 'revealEntry1');
+createBigBulbRow('阅 读 词 汇', 'revealEntry2');
+createBigBulbRow('短 语 积 累', 'revealEntry3');
+createBigBulbRow('录 入 词 书', 'revealEntry4');
+
+// 原始小词条入口不再生成，由上面的放大版取代
+
+// =====================================================
+//  点击过渡后的词条 — revealEntry1=灯带页码, 其余跳转React
+// =====================================================
+document.getElementById('revealEntry1').addEventListener('click', (e) => {
+  const row = document.getElementById('revealEntry1');
+  // 先确保词书数据已加载
+  if (typeof ieltsCoreWords === 'undefined') {
+    rowClickEffect(row, '/a4-paper/');
+    return;
+  }
+  // 显示灯带
+  row.style.transition = 'transform 0.15s';
+  row.style.transform = 'scale(1.2)';
+  setTimeout(() => {
+    row.style.transform = 'scale(1)';
+    showPageSelector('ielts');
+  }, 200);
+});
+document.getElementById('revealEntry2').addEventListener('click', (e) => {
+  const row = document.getElementById('revealEntry2');
+  row.style.transition = 'transform 0.15s';
+  row.style.transform = 'scale(1.2)';
+  setTimeout(() => {
+    row.style.transform = 'scale(1)';
+    document.getElementById('revealedOverlay').classList.remove('showing');
+    document.getElementById('articleSelector').classList.add('showing');
+    renderArticleList();
+  }, 200);
+});
+document.getElementById('revealEntry3').addEventListener('click', () => {
+  const row = document.getElementById('revealEntry3');
+  row.style.transition = 'transform 0.15s';
+  row.style.transform = 'scale(1.2)';
+  setTimeout(() => {
+    row.style.transform = 'scale(1)';
+    openPhrasePanel();
+  }, 200);
+});
+document.getElementById('revealEntry4').addEventListener('click', (e) => {
+  const row = document.getElementById('revealEntry4');
+  row.style.transition = 'transform 0.15s';
+  row.style.transform = 'scale(1.2)';
+  setTimeout(() => {
+    row.style.transform = 'scale(1)';
+    document.getElementById('revealedOverlay').classList.remove('showing');
+    openImportPanel(null, 'custom_book');
+  }, 200);
+});
+
+// —— 返回首页 ——
+document.getElementById('homeBtn').addEventListener('click', () => {
+  // 优雅淡出后重载
+  const transitionMs = 600;
+  document.body.style.transition = 'opacity ' + transitionMs + 'ms ease';
+  document.body.style.opacity = '0';
+  setTimeout(() => { location.reload(); }, transitionMs);
+});
+
+function rowClickEffect(row, url) {
+  row.style.transition = 'transform 0.15s';
+  row.style.transform = 'scale(1.2)';
+  setTimeout(() => {
+    row.style.transform = 'scale(1)';
+    window.location.href = url;
+  }, 200);
+}
+
+
+// =====================================================
+//  引擎初始化（粒子 + 辉光 + 音频）
+// =====================================================
+
+const GC = document.getElementById('glowCanvas');
+const PC = document.getElementById('particleCanvas');
+const gctx = GC.getContext('2d');
+const pctx = PC.getContext('2d');
+
+let mx = window.innerWidth/2, my = window.innerHeight/2, mouseIn = false;
+
+document.addEventListener('mousemove', e => { mx=e.clientX; my=e.clientY; mouseIn=true; });
+document.addEventListener('mouseleave', () => { mouseIn=false; });
+
+const DPR = Math.min(devicePixelRatio || 1, 2);
+function resizeAll() {
+  [GC, PC].forEach(c => {
+    c.style.width = window.innerWidth + 'px';
+    c.style.height = window.innerHeight + 'px';
+    c.width = window.innerWidth * DPR;
+    c.height = window.innerHeight * DPR;
+  });
+  gctx.setTransform(DPR,0,0,DPR,0,0);
+  pctx.setTransform(DPR,0,0,DPR,0,0);
+}
+resizeAll();
+window.addEventListener('resize', resizeAll);
+
+const W = () => window.innerWidth;
+const H = () => window.innerHeight;
+function portalC() { return { x: W()*0.50, y: H()*0.47 }; }
+function portalR() { const w=W(),h=H(); return { rx: w*0.17, ry: h*0.20 }; }
+
+// 色差
+let chromatic = 0;
+function applyChromatic() {
+  const i = Math.min(chromatic, 1);
+  if (i < 0.01) { document.body.style.filter = ''; return; }
+  const d = i * 6;
+  document.body.style.filter = `drop-shadow(${d}px 0 rgba(255,0,0,0.5)) drop-shadow(${-d}px 0 rgba(0,0,255,0.5))`;
+}
+
+// 音频
+let audioCtx = null, droneOsc = null, droneGain = null, noiseNode = null, audioStarted = false;
+function initAudio() {
+  if (audioStarted) return;
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    droneOsc = audioCtx.createOscillator();
+    droneOsc.type = 'sawtooth';
+    droneOsc.frequency.value = 55;
+
+    const d2 = audioCtx.createOscillator();
+    d2.type = 'sine'; d2.frequency.value = 27.5;
+    const d3 = audioCtx.createOscillator();
+    d3.type = 'sine'; d3.frequency.value = 110;
+
+    droneGain = audioCtx.createGain();
+    droneGain.gain.value = 0.035;
+    const dg2 = audioCtx.createGain();
+    dg2.gain.value = 0.04;
+    const dg3 = audioCtx.createGain();
+    dg3.gain.value = 0.02;
+
+    const lp = audioCtx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 200; lp.Q.value = 0.5;
+
+    droneOsc.connect(droneGain); droneGain.connect(lp);
+    d2.connect(dg2); dg2.connect(lp);
+    d3.connect(dg3); dg3.connect(lp);
+    lp.connect(audioCtx.destination);
+    droneOsc.start(); d2.start(); d3.start();
+
+    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate*2, audioCtx.sampleRate);
+    const dat = buf.getChannelData(0);
+    for (let i=0; i<dat.length; i++) dat[i] = (Math.random()*2-1)*0.25;
+    noiseNode = audioCtx.createBufferSource();
+    noiseNode.buffer = buf; noiseNode.loop = true;
+    const ng = audioCtx.createGain();
+    ng.gain.value = 0.003;
+    const nf = audioCtx.createBiquadFilter();
+    nf.type = 'bandpass'; nf.frequency.value = 300; nf.Q.value = 0.3;
+    noiseNode.connect(ng); ng.connect(nf); nf.connect(audioCtx.destination);
+    noiseNode.start();
+    audioStarted = true;
+  } catch(e) { console.log('Audio init failed:', e); }
+}
+
+function updateDrone() {
+  if (!audioStarted || !droneGain || !droneOsc) return;
+  const c = portalC();
+  const prox = Math.min(1, Math.sqrt(((mx-c.x)/(W()*0.3))**2 + ((my-c.y)/(H()*0.3))**2));
+  const near = 1 - prox;
+  droneGain.gain.value = 0.02 + near * 0.06;
+  droneOsc.frequency.value = 50 + near * 20;
+  if (mouseIn) chromatic = Math.min(chromatic + near * 0.015, near * 0.4);
+  else chromatic *= 0.92;
+  applyChromatic();
+  requestAnimationFrame(updateDrone);
+}
+
+// 粒子类
+class Ash {
+  constructor() {
+    this.reset();
+  }
+  reset() {
+    const c = portalC(), r = portalR();
+    const a = Math.random() * Math.PI * 2;
+    this.x = c.x + Math.cos(a) * r.rx * (0.85+Math.random()*0.15);
+    this.y = c.y + Math.sin(a) * r.ry * 0.8*(0.85+Math.random()*0.15);
+    this.vx = Math.cos(a) * (0.2 + Math.random()*0.4) + (Math.random()-0.5)*0.3;
+    this.vy = -0.3 - Math.random()*0.8 + (Math.random()-0.5)*0.3;
+    this.sz = 0.8 + Math.random() * 2.5;
+    this.alpha = 0.2 + Math.random() * 0.4;
+    this.life = 0.5 + Math.random() * 0.5;
+    this.decay = 0.004 + Math.random() * 0.01;
+    this.hue = 5 + Math.random() * 20;
+    this.light = 30 + Math.random() * 30;
+  }
+  update(dt) {
+    this.x += this.vx * dt; this.y += this.vy * dt;
+    this.vy -= 0.008 * dt; this.vx *= 0.97;
+    this.life -= this.decay * dt;
+    if (this.life <= 0) this.reset();
+  }
+  draw() {
+    const a = this.alpha * Math.max(0, this.life);
+    if (a < 0.01) return;
+    pctx.save();
+    pctx.globalAlpha = a * 0.6;
+    const g = pctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.sz*4);
+    g.addColorStop(0, `hsla(${this.hue}, 70%, ${Math.min(90, this.light+30)}%, ${a})`);
+    g.addColorStop(0.2, `hsla(${this.hue}, 65%, ${this.light+10}%, ${a*0.3})`);
+    g.addColorStop(1, 'transparent');
+    pctx.fillStyle = g;
+    pctx.beginPath();
+    pctx.arc(this.x, this.y, this.sz*4, 0, Math.PI*2);
+    pctx.fill();
+    pctx.restore();
+  }
+}
+
+class EdgeSpark {
+  constructor() {
+    this.angle = Math.random() * Math.PI * 2;
+    this.phase = Math.random() * Math.PI * 2;
+    this.spd = 0.3 + Math.random() * 2;
+    this.sz = 1.5 + Math.random() * 3;
+    this.hue = 5 + Math.random() * 25;
+    this.light = 40 + Math.random() * 35;
+  }
+  update(dt) {
+    this.phase += this.spd * dt;
+    this.angle += Math.sin(this.phase*0.2) * 0.001 * dt;
+  }
+  draw() {
+    const f = Math.sin(this.phase) * 0.3 + 0.7;
+    const a = f * 0.25;
+    if (a < 0.01) return;
+    const c = portalC(), r = portalR();
+    const ex = 1.02 + Math.sin(this.phase*0.3) * 0.04;
+    const x = c.x + Math.cos(this.angle) * r.rx * ex;
+    const y = c.y + Math.sin(this.angle) * r.ry * 0.8 * ex;
+    pctx.save();
+    pctx.globalAlpha = a;
+    const g = pctx.createRadialGradient(x, y, 0, x, y, f*this.sz*3);
+    g.addColorStop(0, `hsla(${this.hue}, 90%, ${this.light+15}%, ${a})`);
+    g.addColorStop(0.3, `hsla(${this.hue}, 80%, ${this.light}%, ${a*0.3})`);
+    g.addColorStop(1, 'transparent');
+    pctx.fillStyle = g;
+    pctx.beginPath();
+    pctx.arc(x, y, f*this.sz*3, 0, Math.PI*2);
+    pctx.fill();
+    pctx.restore();
+  }
+}
+
+class ClickBurst {
+  constructor(x,y) {
+    this.x=x; this.y=y;
+    const a = Math.random()*Math.PI*2;
+    const sp = 1.5+Math.random()*5;
+    this.vx = Math.cos(a)*sp; this.vy = Math.sin(a)*sp - 1;
+    this.sz = 1+Math.random()*3;
+    this.a = 0.5+Math.random()*0.5;
+    this.life = 0.5+Math.random()*0.5;
+    this.decay = 0.008+Math.random()*0.015;
+    this.hue = 5+Math.random()*30; this.light = 60+Math.random()*40;
+  }
+  update(dt) {
+    this.x+=this.vx*dt; this.y+=this.vy*dt;
+    this.vy+=0.015*dt; this.vx*=0.95;
+    this.life-=this.decay*dt;
+  }
+  draw() {
+    const a = this.a*Math.max(0,this.life);
+    if (a<0.01) return;
+    pctx.save();
+    pctx.globalAlpha = a;
+    const g = pctx.createRadialGradient(this.x,this.y,0, this.x,this.y, this.sz*6);
+    g.addColorStop(0, `hsla(${this.hue}, 90%, ${Math.min(98,this.light+20)}%, ${a})`);
+    g.addColorStop(0.2, `hsla(${this.hue}, 85%, ${this.light}%, ${a*0.3})`);
+    g.addColorStop(1, 'transparent');
+    pctx.fillStyle = g;
+    pctx.beginPath();
+    pctx.arc(this.x,this.y,this.sz*6,0,Math.PI*2);
+    pctx.fill();
+    pctx.restore();
+  }
+}
+
+// 初始化粒子
+const ashes = Array.from({ length: 30 }, () => new Ash());
+const edgeSparks = Array.from({ length: 40 }, () => new EdgeSpark());
+let bursts = [];
+let clickPulse = 0, clickPX = 0, clickPY = 0;
+let hintIdx = 0;
+
+const HINTS = [
+  '✦ 触碰入口 · 聆听深渊 ✦','🌌 你听到了远方的低语...',
+  '🔥 入口在呼吸... 它在注视你','🌀 时空在扭曲...',
+  '✨ 有什么东西在靠近...','👁️ 它在观察你... 小心',
+  '💫 星光在黑暗中脉动...','⚠️ 现实信号在衰减...',
+  '⚡ 异世界能量泄漏中...','🌑 洞口在扩大...',
+];
+
+// 粒子Canvas点击 → 触发深渊过渡
+PC.addEventListener('click', e => {
+  // 先初始化音频（用户交互触发）
+  if (!audioStarted) initAudio();
+
+  clickPX=e.clientX; clickPY=e.clientY;
+  clickPulse=1.0; chromatic=1.0;
+  for (let i=0;i<40;i++) bursts.push(new ClickBurst(clickPX,clickPY));
+
+  if (navigator.vibrate) navigator.vibrate(100);
+
+  if (audioStarted && audioCtx) {
+    try {
+    const clickBuf = audioCtx.createBuffer(1, audioCtx.sampleRate*0.2, audioCtx.sampleRate);
+    const cd = clickBuf.getChannelData(0);
+    for (let i=0;i<cd.length;i++) cd[i] = (Math.random()*2-1) * Math.exp(-i/audioCtx.sampleRate*15) * 0.5;
+    const cn = audioCtx.createBufferSource();
+    cn.buffer = clickBuf;
+    const cg = audioCtx.createGain();
+    cg.gain.value = 0.12;
+    const cf = audioCtx.createBiquadFilter();
+    cf.type = 'highpass';
+    cf.frequency.value = 500;
+    cn.connect(cg); cg.connect(cf); cf.connect(audioCtx.destination);
+    cn.start();
+  } catch(e) {}
+}
+
+// 切换提示文字
+const hintEl = document.getElementById('hintText');
+hintEl.textContent = HINTS[hintIdx % HINTS.length];
+hintIdx++;
+
+// ——— 点击深渊入口 → 穿越洞穴入口 → 彩灯墙 ———
+if (window._portalRevealed) return;
+window._portalRevealed = true;
+
+document.querySelector('.portal-hint').classList.add('gone');
+
+if (droneGain) {
+  droneGain.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 1.5);
+}
+
+// 逐帧清除粒子
+const fadeP = setInterval(() => { if (ashes.length > 0) ashes.pop(); }, 30);
+setTimeout(() => clearInterval(fadeP), 2000);
+
+// ========== 穿越洞穴入口动画 — 全沉浸六阶段 ==========
+// 延迟一点点等深渊粒子开始消退，然后洞穴图从中心光源点展开
+setTimeout(() => {
+  const caveEl = document.getElementById('caveTransition');
+  const caveImg = document.getElementById('caveImg');
+  const lightWash = document.getElementById('caveLightWash');
+  const wallGlow = document.getElementById('caveWallGlow');
+  const vignette = document.getElementById('caveVignette');
+  const warpRipple = document.getElementById('caveWarpRipple');
+  const dustParticles = document.getElementById('caveDustCanvas');
+  const rippleCanvas = document.getElementById('rippleCanvas');
+
+  function startCaveTransition() {
+    // —— 第1阶段：洞穴图片从中心亮点展开（CSS animation）——
+    caveEl.classList.add('entering');
+
+    // —— 第2阶段：暖色光晕铺开（与图片同步）——
+    setTimeout(() => { lightWash.classList.add('active'); }, 50);
+
+    // —— 第3阶段：岩壁纹理微光浮现（延迟一点，让画面先有层次）——
+    setTimeout(() => { wallGlow.classList.add('active'); }, 350);
+
+    // —— 第4阶段：暗角遮罩渐显（模拟走进洞口深处）——
+    setTimeout(() => { vignette.classList.add('active'); }, 300);
+
+    // —— 第5阶段：3D立体波纹扭曲（在洞穴表面产生空间扭曲感）——
+    setTimeout(() => {
+      warpRipple.classList.add('active');
+      // 用 Canvas 绘制动态扭曲波纹
+      startRippleAnimation(rippleCanvas);
+    }, 500);
+
+    // —— 第6阶段：暖光尘埃粒子漂浮（洞穴内部的光尘）——
+    setTimeout(() => {
+      dustParticles.classList.add('active');
+      startCaveDustAnimation(document.getElementById('dustCanvas'));
+    }, 700);
+
+    // 同时低频嗡鸣随画面亮起而增强
+    if (audioStarted && droneGain) {
+      try {
+        // 产生一个"洞穴共鸣"音效短脉冲
+        const cavePulse = audioCtx.createOscillator();
+        cavePulse.type = 'sine';
+        cavePulse.frequency.value = 80;
+        const cpGain = audioCtx.createGain();
+        cpGain.gain.setValueAtTime(0, audioCtx.currentTime);
+        cpGain.gain.linearRampToValueAtTime(0.025, audioCtx.currentTime + 1.0);
+        cpGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 2.5);
+        const cpLP = audioCtx.createBiquadFilter();
+        cpLP.type = 'lowpass';
+        cpLP.frequency.value = 150;
+        cavePulse.connect(cpGain);
+        cpGain.connect(cpLP);
+        cpLP.connect(audioCtx.destination);
+        cavePulse.start();
+        cavePulse.stop(audioCtx.currentTime + 2.5);
+      } catch(e) {}
+    }
+  }
+
+  if (caveImg.complete) {
+    startCaveTransition();
+  } else {
+    caveImg.onload = startCaveTransition;
+  }
+
+  // —— 洞穴穿越完成后 → 揭开彩灯墙 ——
+  // 用交叉渐变：洞穴先定格→卧室图在洞穴层下方淡入→洞穴层淡出→词条显现
+  setTimeout(() => {
+    const reveal = () => {
+      // 1) 卧室背景图开始淡入（在洞穴层下方 z-index:1）
+      document.getElementById('wallImg').src = '微信图片_20260724190939_847_17.jpg';
+      const imgFrame = document.querySelector('.img-frame');
+
+      // 2) 洞穴层先快速淡出，同时卧室图快速淡入（同步交叉）
+      caveEl.style.transition = 'opacity 0.8s ease';
+      caveEl.style.opacity = '0';
+      imgFrame.style.transition = 'opacity 1.0s ease';
+      imgFrame.style.opacity = '1';
+
+      // 3) 同步淡出洞穴辅助层
+      lightWash.style.transition = 'opacity 0.4s ease';
+      lightWash.style.opacity = '0';
+      vignette.style.transition = 'opacity 0.5s ease';
+      vignette.style.opacity = '0';
+      wallGlow.style.transition = 'opacity 0.4s ease';
+      wallGlow.style.opacity = '0';
+      warpRipple.style.transition = 'opacity 0.3s ease';
+      warpRipple.style.opacity = '0';
+      dustParticles.style.transition = 'opacity 0.4s ease';
+      dustParticles.style.opacity = '0';
+
+      // 4) 洞穴完全淡出后（约0.8s）→ 开启遮罩 + 显示词条
+      setTimeout(() => {
+        caveEl.style.display = 'none';
+        lightWash.style.display = 'none';
+        wallGlow.style.display = 'none';
+        vignette.style.display = 'none';
+        warpRipple.style.display = 'none';
+        dustParticles.style.display = 'none';
+
+        // 开启遮罩（卧室墙变暗，灯泡更亮）
+        document.getElementById('revealMask').classList.add('active');
+
+        // 显示放大版词条（灯泡逐个亮起）
+        document.getElementById('revealedOverlay').classList.add('showing');
+        // 渲染已保存的自定义词书
+        renderCustomBookRows();
+
+        // 副标题延迟渐显
+        setTimeout(() => {
+          document.getElementById('revealSubtitle').classList.add('show');
+          document.getElementById('homeBtn').classList.add('show');
+        }, 400);
+      }, 800); // 等洞穴淡出完成
+
+      // 清空深粒子
+      ashes.length = 0;
+      bursts.length = 0;
+      edgeSparks.length = 0;
+    };
+
+    // 给洞穴一个短暂的"全屏定格"感受（约200ms），然后才开始交叉过渡
+    setTimeout(reveal, 200);
+  }, 2200); // 2.2秒洞穴完全展开 + 体验时间（原3.5s）
+}, 300);
+}); // ← 闭合 PC.addEventListener
+
+// ===== 洞穴3D扭曲波纹动画 =====
+function startRippleAnimation(canvas) {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  canvas.style.width = '100%';
+  canvas.style.height = '100%';
+  const w = window.innerWidth, h = window.innerHeight;
+  let t = 0;
+  let rippleActive = true;
+
+  // 在洞穴穿越完成后自动停止
+  setTimeout(() => { rippleActive = false; }, 2000);
+
+  function drawRipple() {
+    if (!rippleActive) { ctx.clearRect(0,0,w,h); return; }
+    ctx.clearRect(0,0,w,h);
+    t += 0.02;
+
+    // 多个放射状波纹，从洞穴光源点(50%,43%)扩散
+    const cx = w * 0.5, cy = h * 0.43;
+    for (let ring = 0; ring < 3; ring++) {
+      const phase = t * 0.8 + ring * 2.1;
+      const maxR = Math.sqrt(w*w + h*h) * 0.5;
+
+      // 每个波纹用径向渐变+波浪alpha
+      for (let r = 0; r < maxR; r += 2) {
+        const wave = Math.sin(phase - r * 0.05) * 0.5 + 0.5;
+        const alpha = wave * 0.03 * (1 - r / maxR);
+        if (alpha < 0.001) continue;
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255, 150, 50, ${alpha})`;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+    }
+
+    // 额外的光晕脉冲
+    const pulseA = Math.sin(t * 1.5) * 0.5 + 0.5;
+    const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, h * 0.3);
+    grd.addColorStop(0, `rgba(255, 180, 60, ${pulseA * 0.04})`);
+    grd.addColorStop(0.5, `rgba(255, 100, 20, ${pulseA * 0.02})`);
+    grd.addColorStop(1, 'transparent');
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, w, h);
+
+    requestAnimationFrame(drawRipple);
+  }
+  drawRipple();
+}
+
+// ===== 洞穴暖光尘埃粒子动画 =====
+function startCaveDustAnimation(canvas) {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  canvas.style.width = '100%';
+  canvas.style.height = '100%';
+  const w = window.innerWidth, h = window.innerHeight;
+
+  // 生成洞穴尘埃粒子 — 比深渊粒子更大、更暖、更慢
+  const dustParticles_arr = [];
+  for (let i = 0; i < 50; i++) {
+    dustParticles_arr.push({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: -0.1 - Math.random() * 0.2,
+      size: 2 + Math.random() * 6,
+      alpha: 0.05 + Math.random() * 0.15,
+      hue: 15 + Math.random() * 25, // 暖橙色调
+      life: 0.5 + Math.random() * 0.5,
+      pulse: Math.random() * Math.PI * 2
+    });
+  }
+
+  let dustActive = true;
+  setTimeout(() => { dustActive = false; }, 2200);
+
+  function drawDust() {
+    if (!dustActive) { ctx.clearRect(0,0,w,h); return; }
+    ctx.clearRect(0,0,w,h);
+
+    for (const p of dustParticles_arr) {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.pulse += 0.02;
+      // 回绕
+      if (p.y < -10) { p.y = h + 10; p.x = Math.random() * w; }
+      if (p.x < -10) p.x = w + 10;
+      if (p.x > w + 10) p.x = -10;
+
+      const pulseA = Math.sin(p.pulse) * 0.3 + 0.7;
+      const a = p.alpha * pulseA;
+      if (a < 0.01) continue;
+
+      // 暖光尘埃 — 用径向渐变做出发光颗粒感
+      const grd = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 3);
+      grd.addColorStop(0, `hsla(${p.hue}, 80%, 70%, ${a * 0.8})`);
+      grd.addColorStop(0.3, `hsla(${p.hue}, 70%, 50%, ${a * 0.3})`);
+      grd.addColorStop(1, 'transparent');
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    requestAnimationFrame(drawDust);
+  }
+  drawDust();
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== 't' && e.key !== 'T') return;
+
+  // 学习面板打开时，Enter 优先触发学习流程按钮
+  if (e.key === 'Enter' && !['INPUT','TEXTAREA'].includes(e.target.tagName)) {
+    const learnPanel = document.getElementById('learnPanel');
+    if (learnPanel && learnPanel.classList.contains('showing')) {
+      // 判断结果阶段 → 继续
+      if (learnState._judgmentResult) {
+        e.preventDefault();
+        handleContinueAfterJudgment();
+        return;
+      }
+      // 学词卡阶段 → 已掌握
+      if (learnState.phase === 'learn') {
+        e.preventDefault();
+        handleFinishLearning();
+        return;
+      }
+      // 完成页 → 继续
+      if (learnState.phase === 'page-done') {
+        e.preventDefault();
+        handlePageDoneContinue();
+        return;
+      }
+    }
+  }
+
+  // 否则：电源卡点击
+  PC.click();
+});
+
+// =====================================================
+//  粒子主循环
+// =====================================================
+let lt = performance.now();
+
+function particleLoop(time) {
+  const dt = Math.min((time-lt)/16.667, 4);
+  lt = time;
+  const w = W(), h = H();
+
+  pctx.clearRect(0, 0, w, h);
+
+  if (clickPulse > 0) clickPulse = Math.max(0, clickPulse - 0.02 * dt);
+  if (chromatic > 0.01) {
+    chromatic = Math.max(0, chromatic - 0.008 * dt);
+  }
+  if (mouseIn) {
+    const c = portalC();
+    const prox = Math.min(1, Math.sqrt(((mx-c.x)/(W()*0.18))**2 + ((my-c.y)/(H()*0.18))**2));
+    if (prox < 0.8) chromatic = Math.max(chromatic, (1-prox) * 0.25);
+  }
+  applyChromatic();
+
+  bursts = bursts.filter(p => { p.update(dt); return p.life > 0; });
+  ashes.forEach(a => a.update(dt));
+  edgeSparks.forEach(e => e.update(dt));
+
+  edgeSparks.forEach(e => e.draw());
+  ashes.forEach(a => a.draw());
+  bursts.forEach(p => p.draw());
+
+  // 点击脉冲渲染
+  if (clickPulse > 0) {
+    const p = clickPulse;
+    const rad = Math.max(W(), H()) * 0.5 * (1-p) + W()*0.02;
+    gctx.save();
+    gctx.globalAlpha = p * 0.15;
+    const pg = gctx.createRadialGradient(clickPX,clickPY,0, clickPX,clickPY,rad);
+    pg.addColorStop(0, 'rgba(255,120,40,0.3)');
+    pg.addColorStop(0.3, 'rgba(255,80,20,0.1)');
+    pg.addColorStop(1, 'transparent');
+    gctx.fillStyle = pg;
+    gctx.beginPath();
+    gctx.arc(clickPX,clickPY,rad,0,Math.PI*2);
+    gctx.fill();
+    gctx.restore();
+  }
+
+  requestAnimationFrame(particleLoop);
+}
+requestAnimationFrame(particleLoop);
+
+// =====================================================
+//  辉光层
+// =====================================================
+function glowLoop(time) {
+  const w = W(), h = H();
+
+  gctx.clearRect(0, 0, w, h);
+
+  const c = portalC();
+  const r = portalR();
+  const prox = Math.min(1, Math.sqrt(((mx-c.x)/(w*0.20))**2 + ((my-c.y)/(h*0.20))**2));
+  const near = 1 - prox;
+  const close = 1 - Math.min(1, Math.sqrt(((mx-c.x)/(w*0.08))**2 + ((my-c.y)/(h*0.08))**2));
+
+  const pull = near * 0.08;
+  const ox = (mx - c.x) * pull;
+  const oy = (my - c.y) * pull;
+  const gx = c.x + ox;
+  const gy = c.y + oy;
+
+  // 外圈辉光
+  const baseA = 0.08 + near * 0.15;
+  const baseR = Math.max(r.rx, r.ry) * 2.0;
+  {
+    const g = gctx.createRadialGradient(gx, gy, 0, gx, gy, baseR);
+    g.addColorStop(0, `rgba(255,90,20,${baseA*0.6})`);
+    g.addColorStop(0.3, `rgba(200,60,15,${baseA*0.3})`);
+    g.addColorStop(0.6, `rgba(150,40,10,${baseA*0.1})`);
+    g.addColorStop(1, 'transparent');
+    gctx.fillStyle = g;
+    gctx.beginPath();
+    gctx.arc(gx, gy, baseR, 0, Math.PI*2);
+    gctx.fill();
+  }
+
+  // 中层辉光
+  const breathe = 1 + Math.sin(time * 0.003) * 0.04;
+  const midA = 0.15 + near * 0.25;
+  {
+    const g = gctx.createRadialGradient(gx, gy, 0, gx, gy, r.rx * 1.1 * breathe);
+    g.addColorStop(0, `rgba(255,140,40,${midA*0.8})`);
+    g.addColorStop(0.5, `rgba(220,80,25,${midA*0.4})`);
+    g.addColorStop(1, 'transparent');
+    gctx.fillStyle = g;
+    gctx.beginPath();
+    gctx.arc(gx, gy, r.rx * 1.1 * breathe, 0, Math.PI*2);
+    gctx.fill();
+  }
+
+  // 核心暖白辉光
+  const coreScale = 1 + close * 0.10;
+  const coreA = 0.15 + close * 0.30;
+  {
+    const g = gctx.createRadialGradient(gx, gy, 0, gx, gy, r.rx * 0.6 * coreScale);
+    g.addColorStop(0, `rgba(255,200,120,${coreA})`);
+    g.addColorStop(0.3, `rgba(255,160,70,${coreA*0.5})`);
+    g.addColorStop(1, 'transparent');
+    gctx.fillStyle = g;
+    gctx.beginPath();
+    gctx.arc(gx, gy, r.rx * 0.6 * coreScale, 0, Math.PI*2);
+    gctx.fill();
+  }
+
+  // 光标极近光晕
+  if (close > 0.2) {
+    const spotA = close * 0.25;
+    const spotR = r.rx * 0.4 * (1 - close * 0.3);
+    const g = gctx.createRadialGradient(mx, my, 0, mx, my, spotR);
+    g.addColorStop(0, `rgba(255,180,100,${spotA})`);
+    g.addColorStop(0.4, `rgba(255,140,60,${spotA*0.3})`);
+    g.addColorStop(1, 'transparent');
+    gctx.fillStyle = g;
+    gctx.beginPath();
+    gctx.arc(mx, my, spotR, 0, Math.PI*2);
+    gctx.fill();
+  }
+
+  // 呼吸环
+  if (close > 0.1) {
+    const ringA = close * 0.15;
+    const ringW = 0.5 + close * 4;
+    gctx.save();
+    gctx.globalAlpha = ringA;
+    gctx.strokeStyle = 'rgba(255,150,60,0.6)';
+    gctx.lineWidth = ringW;
+    gctx.beginPath();
+    gctx.ellipse(c.x, c.y, r.rx * 0.95, r.ry * 0.85, 0, 0, Math.PI * 2);
+    gctx.stroke();
+    gctx.restore();
+  }
+
+  // 远距离牵引柔光
+  if (prox > 0.3) {
+    const farA = (1 - Math.min(1, prox)) * 0.06;
+    const farR = r.rx * (0.4 + (1 - Math.min(1, prox)) * 0.5);
+    const g = gctx.createRadialGradient(gx, gy, 0, gx, gy, farR);
+    g.addColorStop(0, `rgba(255,120,50,${farA})`);
+    g.addColorStop(1, 'transparent');
+    gctx.fillStyle = g;
+    gctx.beginPath();
+    gctx.arc(gx, gy, farR, 0, Math.PI*2);
+    gctx.fill();
+  }
+
+  requestAnimationFrame(glowLoop);
+}
+requestAnimationFrame(glowLoop);
+
+// =====================================================
+//  启动
+// =====================================================
+
+// 页面加载后先启动粒子 + 辉光（音频等待点击触发）
+updateDrone();
+console.log('🌌 异世界深渊入口已激活');
+
+  // =====================================================
+  //  灯带页码选择器
+  // =====================================================
+
+  // 词库数据从外部 words-data.js 加载
+  // 需要先加载 words-data.js
+  
+  const PAGE_SIZE = 25;
+  const TOTAL_PAGES = 120; // IELTS词汇固定120页
+  let currentBookId = 'cambridge-ielts-1';
+  let currentPageIdx = 0;
+
+  function getCurrentTotalPages() {
+    if (currentBookId && currentBookId.startsWith('reading_')) {
+      return getArticleTotalPages(currentBookId);
+    }
+    if (currentBookId && currentBookId.startsWith('custom_')) {
+      return getCustomBookTotalPages(currentBookId);
+    }
+    return TOTAL_PAGES;
+  }
+
+  function buildPageGrid() {
+    const grid = document.getElementById('pageGrid');
+    grid.innerHTML = '';
+    const totalPages = getCurrentTotalPages();
+    for (let i = 1; i <= totalPages; i++) {
+      const bulb = document.createElement('div');
+      bulb.className = 'page-bulb';
+      bulb.textContent = i;
+      bulb.dataset.page = i;
+      bulb.addEventListener('click', () => {
+        // 清除继续上次按钮
+        const rb = document.getElementById('resumeBtn');
+        if (rb) rb.remove();
+        // 高亮选中的灯泡
+        grid.querySelectorAll('.page-bulb').forEach(b => b.classList.remove('selected'));
+        bulb.classList.add('selected');
+        // 开始学习该页
+        const pageIndex = parseInt(bulb.dataset.page) - 1; // 0-indexed
+        startLearningPage(pageIndex);
+      });
+      grid.appendChild(bulb);
+    }
+    // 恢复已完成页码的灯泡状态
+    const completed = loadCompletedPages();
+    completed.forEach(idx => {
+      const b = grid.querySelector(`.page-bulb[data-page="${idx + 1}"]`);
+      if (b) b.classList.add('completed');
+    });
+  }
+
+  // 灯带面板显示/隐藏
+  function showPageSelector(source) {
+    document.getElementById('revealedOverlay').classList.remove('showing');
+    document.getElementById('pageSelector').classList.add('showing');
+    buildPageGrid();
+
+    // 保存来源：'ielts' | 'reading' | 'custom'
+    window._pageSource = source || 'ielts';
+
+    // 更新标题和返回按钮
+    const titleEl = document.getElementById('pageSelectorTitle');
+    if (source === 'reading') {
+      const article = getArticleById(currentBookId);
+      titleEl.innerHTML = (article ? article.title : '篇 目') +
+        ' <small style="display:block;font-size:12px;letter-spacing:3px;color:rgba(200,170,140,0.3)">点击灯泡进入该页学习</small>';
+      document.getElementById('pageSelectorBack').textContent = '← 返回篇目';
+    } else if (source === 'custom') {
+      const book = getCustomBookById(currentBookId);
+      titleEl.innerHTML = (book ? book.title : '我的词书') +
+        ' <small style="display:block;font-size:12px;letter-spacing:3px;color:rgba(200,170,140,0.3)">点击灯泡进入该页学习</small>';
+      document.getElementById('pageSelectorBack').textContent = '← 返回词书列表';
+    } else {
+      titleEl.innerHTML = '选 择 页 码 <small style="display:block;font-size:12px;letter-spacing:3px;color:rgba(200,170,140,0.3)">点击灯泡进入该页学习</small>';
+      document.getElementById('pageSelectorBack').textContent = '← 返回词书';
+    }
+
+    // 🦐 检查是否有未完成的会话
+    showResumeButton(source);
+  }
+
+  function showResumeButton(source) {
+    // 移除旧按钮
+    const old = document.getElementById('resumeBtn');
+    if (old) old.remove();
+
+    const session = loadSession();
+    if (!session || session.bookId !== currentBookId) return;
+    // 检查页是否已完成
+    const completed = loadCompletedPages();
+    if (completed.has(session.pageIdx)) { clearSession(); return; }
+
+    const pageNum = session.pageIdx + 1;
+    const btn = document.createElement('div');
+    btn.id = 'resumeBtn';
+    btn.style.cssText = 'position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:10001;' +
+      'background:rgba(255,200,80,0.12);border:1px solid rgba(255,200,80,0.3);border-radius:24px;' +
+      'padding:10px 28px;font-size:14px;letter-spacing:3px;color:rgba(255,200,80,0.9);' +
+      'cursor:pointer;font-family:"Courier New",monospace;transition:all 0.3s;' +
+      'animation:pulseGlow 2s infinite;';
+    btn.innerHTML = '🔥 继 续 上 次 · 第 ' + pageNum + ' 页';
+    btn.onmouseenter = function() { this.style.background = 'rgba(255,200,80,0.2)'; this.style.borderColor = 'rgba(255,200,80,0.6)'; };
+    btn.onmouseleave = function() { this.style.background = 'rgba(255,200,80,0.12)'; this.style.borderColor = 'rgba(255,200,80,0.3)'; };
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      this.remove();
+      resumeLearningSession(session);
+    });
+    document.body.appendChild(btn);
+
+    // 同时高亮那个灯泡
+    setTimeout(() => {
+      const bulb = document.querySelector('.page-bulb[data-page="' + pageNum + '"]');
+      if (bulb) {
+        bulb.classList.add('resume-page');
+        bulb.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
+  }
+
+  function hidePageSelector() {
+    document.getElementById('pageSelector').classList.remove('showing');
+    // 清除继续上次按钮
+    const rb = document.getElementById('resumeBtn');
+    if (rb) rb.remove();
+    // 根据来源决定返回哪里
+    if (window._pageSource === 'reading') {
+      document.getElementById('articleSelector').classList.add('showing');
+      renderArticleList();
+    } else {
+      document.getElementById('revealedOverlay').classList.add('showing');
+      if (window._pageSource === 'custom') {
+        renderCustomBookRows();
+      }
+    }
+  }
+
+  // 关闭灯带（回到入口）
+  document.getElementById('pageSelectorClose').addEventListener('click', () => {
+    hidePageSelector();
+  });
+  document.getElementById('pageSelectorBack').addEventListener('click', () => {
+    hidePageSelector();
+  });
+
+  // =====================================================
+  //  阅读篇目 & 录入词书 管理（改造版：完整Word词条）
+  // =====================================================
+
+  // 存储 key（与 React 版一致）
+  const READING_STORAGE_KEY = 'a4paper_reading_banks';
+  const CUSTOM_BOOKS_KEY = 'a4paper_custom_books';
+  const AI_API_URL = 'https://api.deepseek.com/v1/chat/completions';
+
+  // 导入模式: 'custom_book' (录入词书) | 'reading_article' (阅读词汇→录入阅读篇目)
+  let importMode = 'reading_article';
+
+  // ---- 自定义词书数据（独立于阅读篇目） ----
+  function getCustomBooks() {
+    try { const data = localStorage.getItem(CUSTOM_BOOKS_KEY); return data ? JSON.parse(data) : []; }
+    catch(e) { return []; }
+  }
+  function saveCustomBooks(books) {
+    localStorage.setItem(CUSTOM_BOOKS_KEY, JSON.stringify(books));
+  }
+  function getCustomBookById(id) {
+    return getCustomBooks().find(b => b.id === id) || null;
+  }
+
+  // ---- 录入状态 ----
+  let importState = {
+    articleTitle: '',
+    rawWords: [],       // string[] 待补全的单词
+    completeResults: [], // {word, success, data?} 来自 AI 补全
+    sourceArticleId: '', // 如果是续录模式，记录篇目id
+  };
+
+  // ---- 数据模型 ----
+  function getReadingArticles() {
+    try {
+      const data = localStorage.getItem(READING_STORAGE_KEY);
+      return data ? JSON.parse(data) : [];
+    } catch (e) { return []; }
+  }
+
+  function saveReadingArticles(articles) {
+    localStorage.setItem(READING_STORAGE_KEY, JSON.stringify(articles));
+  }
+
+  function getArticleById(articleId) {
+    const articles = getReadingArticles();
+    return articles.find(a => a.id === articleId) || null;
+  }
+
+  // ---- 自定义词书渲染（首页动态词书行） ----
+  function renderCustomBookRows() {
+    const container = document.getElementById('customBooksSection');
+    const label = container.previousElementSibling;
+    const books = getCustomBooks();
+    if (!container) return;
+    container.innerHTML = '';
+    if (books.length === 0) {
+      if (label) label.style.display = 'none';
+      return;
+    }
+    if (label) label.style.display = 'block';
+    books.forEach(book => {
+      const row = document.createElement('div');
+      row.className = 'custom-book-row';
+      row.innerHTML = '<span class="custom-book-row-bulb">💡</span>' +
+        '<span class="custom-book-row-title">' + escapeHtml(book.title) + '</span>' +
+        '<span class="custom-book-row-word-count">' + book.words.length + '词</span>' +
+        '<span class="custom-book-row-delete" data-id="' + book.id + '">×</span>';
+
+      // 点击学习
+      row.addEventListener('click', (e) => {
+        if (e.target.classList.contains('custom-book-row-delete')) return;
+        document.getElementById('revealedOverlay').classList.remove('showing');
+        currentBookId = book.id;
+        showPageSelector('custom');
+      });
+
+      // 删除按钮
+      const delBtn = row.querySelector('.custom-book-row-delete');
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!confirm('确定删除词书「' + book.title + '」吗？')) return;
+        const all = getCustomBooks();
+        const idx = all.findIndex(b => b.id === book.id);
+        if (idx !== -1) { all.splice(idx, 1); saveCustomBooks(all); }
+        renderCustomBookRows();
+      });
+
+      container.appendChild(row);
+    });
+  }
+
+  // ---- 篇目列表渲染 ----
+  function renderArticleList() {
+    const list = document.getElementById('articleList');
+    const articles = getReadingArticles();
+    list.innerHTML = '';
+
+    // 顶部「录入阅读篇目」按钮
+    const newBtn = document.createElement('div');
+    newBtn.className = 'article-new-btn';
+    newBtn.innerHTML = '＋ 录入阅读篇目';
+    newBtn.addEventListener('click', () => {
+      document.getElementById('articleSelector').classList.remove('showing');
+      openImportPanel(null, 'reading_article');
+    });
+    list.appendChild(newBtn);
+
+    if (articles.length === 0) {
+      const hint = document.createElement('div');
+      hint.className = 'article-empty-hint';
+      hint.innerHTML = '暂无录入篇目<br/>点击上方按钮添加';
+      list.appendChild(hint);
+      return;
+    }
+    articles.forEach(article => {
+      const item = document.createElement('div');
+      item.className = 'article-item';
+
+      const info = document.createElement('div');
+      info.className = 'article-item-info';
+      info.innerHTML = '<div class="article-item-title">' + escapeHtml(article.title) +
+        '</div><div class="article-item-meta">共 ' + article.words.length + ' 词 · ' +
+        Math.ceil(article.words.length / PAGE_SIZE) + ' 页</div>';
+      info.style.cursor = 'pointer';
+      info.title = article.words.length > 0 ? '点击开始学习' : '暂无可学单词';
+      info.addEventListener('click', () => {
+        if (article.words.length === 0) return;
+        document.getElementById('articleSelector').classList.remove('showing');
+        currentBookId = article.id;
+        showPageSelector('reading');
+      });
+
+      const actions = document.createElement('div');
+      actions.className = 'article-item-actions';
+
+      const editBtn = document.createElement('div');
+      editBtn.className = 'article-action-btn';
+      editBtn.textContent = '✏️';
+      editBtn.title = '管理单词';
+      editBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        startAddWords(article);
+      });
+
+      const delBtn = document.createElement('div');
+      delBtn.className = 'article-action-btn danger';
+      delBtn.textContent = '🗑️';
+      delBtn.title = '删除篇目';
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!confirm('确定删除此篇目吗？单词将全部丢失。')) return;
+        const all = getReadingArticles();
+        const idx = all.findIndex(a => a.id === article.id);
+        if (idx !== -1) { all.splice(idx, 1); saveReadingArticles(all); }
+        renderArticleList();
+      });
+
+      actions.appendChild(editBtn);
+      actions.appendChild(delBtn);
+      item.appendChild(info);
+      item.appendChild(actions);
+      list.appendChild(item);
+    });
+  }
+
+  function escapeHtml(text) {
+    const d = document.createElement('div');
+    d.textContent = text;
+    return d.innerHTML;
+  }
+
+  // ---- 计算篇目的总页数 ----
+  function getArticleTotalPages(articleId) {
+    const article = getArticleById(articleId);
+    if (!article || !article.words || article.words.length === 0) return 1;
+    return Math.ceil(article.words.length / PAGE_SIZE);
+  }
+  function getCustomBookTotalPages(bookId) {
+    const book = getCustomBookById(bookId);
+    if (!book || !book.words || book.words.length === 0) return 1;
+    return Math.ceil(book.words.length / PAGE_SIZE);
+  }
+
+  // 篇目选择器关闭
+  document.getElementById('articleSelectorClose').addEventListener('click', () => {
+    document.getElementById('articleSelector').classList.remove('showing');
+    document.getElementById('revealedOverlay').classList.add('showing');
+  });
+
+  // ---- 录入流程 ----
+
+  // 打开录入面板（新增或续录）
+  function openImportPanel(article, mode) {
+    // mode: 'reading_article' (默认) | 'custom_book' (录入词书)
+    importMode = mode || 'reading_article';
+    document.getElementById('importPanel').classList.add('showing');
+
+    // 根据模式修改面板标题
+    const titleEl = document.querySelector('.import-title');
+    if (titleEl) {
+      titleEl.textContent = importMode === 'custom_book' ? '录 入 词 书' : '录 入 阅 读 篇 目';
+    }
+    // 根据模式修改保存按钮文本
+    document.getElementById('importSaveBtn').textContent =
+      importMode === 'custom_book' ? '💾 保 存 为 独 立 词 书' : '💾 保 存 到 阅 读 生 词 簿';
+
+    if (article) {
+      // 续录模式（仅阅读篇目支持）
+      importState.articleTitle = article.title;
+      importState.rawWords = [];
+      importState.completeResults = [];
+      importState.sourceArticleId = article.id;
+      document.getElementById('importArticleName').value = article.title;
+      document.getElementById('importCurrentArticleTitle').textContent = '📖 ' + escapeHtml(article.title);
+      document.getElementById('importStepTitle').style.display = 'none';
+      document.getElementById('importStepWords').style.display = 'block';
+      document.getElementById('importAIResults').style.display = 'none';
+      document.getElementById('importAIProgress').style.display = 'none';
+      document.getElementById('importDone').style.display = 'none';
+    } else {
+      // 新建模式
+      importState = { articleTitle: '', rawWords: [], completeResults: [], sourceArticleId: '' };
+      document.getElementById('importArticleName').value = '';
+      document.getElementById('importStepTitle').style.display = 'block';
+      document.getElementById('importStepWords').style.display = 'none';
+      // 根据模式修改标题输入框的 placeholder
+      document.getElementById('importArticleName').placeholder =
+        importMode === 'custom_book' ? '输入自定义词书名称...' : '输入阅读篇目标题...';
+      // 根据模式修改 label
+      const label = document.querySelector('#importStepTitle .import-label');
+      if (label) {
+        label.textContent = importMode === 'custom_book' ? '词 书 名 称' : '篇 目 名 称';
+      }
+    }
+    updateWordTags();
+    updateAIBtn();
+  }
+
+  // 重置录入流程（回到标题输入）
+  function resetImportToTitle() {
+    document.getElementById('importStepTitle').style.display = 'block';
+    document.getElementById('importStepWords').style.display = 'none';
+    document.getElementById('importAIResults').style.display = 'none';
+    document.getElementById('importAIProgress').style.display = 'none';
+    document.getElementById('importDone').style.display = 'none';
+    importState.rawWords = [];
+    importState.completeResults = [];
+    importState.sourceArticleId = '';
+  }
+
+  // 下一步：从标题进入单词录入
+  document.getElementById('importNextStepBtn').addEventListener('click', () => {
+    const title = document.getElementById('importArticleName').value.trim();
+    if (!title) { alert('请输入篇目标题'); return; }
+    importState.articleTitle = title;
+    importState.rawWords = [];
+    importState.completeResults = [];
+    importState.sourceArticleId = '';
+    document.getElementById('importCurrentArticleTitle').textContent = '📖 ' + escapeHtml(title);
+    document.getElementById('importStepTitle').style.display = 'none';
+    document.getElementById('importStepWords').style.display = 'block';
+    document.getElementById('importWordInput').focus();
+    updateWordTags();
+    updateAIBtn();
+  });
+
+  // 返回修改标题
+  document.getElementById('importBackToTitleBtn').addEventListener('click', resetImportToTitle);
+
+  // 添加单词
+  function handleAddWord() {
+    const input = document.getElementById('importWordInput');
+    const w = input.value.trim().toLowerCase();
+    if (!w || importState.rawWords.includes(w)) return;
+    if (!/^[a-z\-]+$/.test(w)) { alert('请输入纯英文单词（字母或连字符）'); return; }
+    importState.rawWords.push(w);
+    input.value = '';
+    updateWordTags();
+    updateAIBtn();
+    input.focus();
+  }
+  document.getElementById('importAddWordBtn').addEventListener('click', handleAddWord);
+
+  // 移除单词
+  function removeRawWord(idx) {
+    importState.rawWords.splice(idx, 1);
+    updateWordTags();
+    updateAIBtn();
+  }
+
+  // 更新单词标签
+  function updateWordTags() {
+    const container = document.getElementById('importWordTags');
+    container.innerHTML = '';
+    importState.rawWords.forEach((w, i) => {
+      const tag = document.createElement('span');
+      tag.className = 'word-tag';
+      tag.innerHTML = escapeHtml(w) + ' <span class="word-tag-remove" data-idx="' + i + '">×</span>';
+      tag.querySelector('.word-tag-remove').addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeRawWord(i);
+      });
+      container.appendChild(tag);
+    });
+  }
+
+  // 更新 AI 按钮文本
+  function updateAIBtn() {
+    const n = importState.rawWords.length;
+    document.getElementById('importStartAIBtn').textContent = '🤖 AI 一键补全（' + n + ' 词）';
+    document.getElementById('importStartAIBtn').style.opacity = n > 0 ? '1' : '0.3';
+  }
+
+  // ---- AI 补全 ----
+  document.getElementById('importStartAIBtn').addEventListener('click', async () => {
+    const words = importState.rawWords;
+    if (words.length === 0) return;
+
+    let apiKey = '';
+    try { apiKey = localStorage.getItem('wordsense_api_key') || ''; } catch(e) {}
+    if (!apiKey) {
+      const input = prompt('请输入 DeepSeek API Key（用于 AI 补全单词信息）：');
+      if (!input) return;
+      apiKey = input.trim();
+      if (!apiKey) return;
+      localStorage.setItem('wordsense_api_key', apiKey);
+    }
+
+    document.getElementById('importAIProgress').style.display = 'block';
+    document.getElementById('importAIResults').style.display = 'none';
+    document.getElementById('importStartAIBtn').style.display = 'none';
+    document.getElementById('importAddWordBtn').style.display = 'none';
+    document.getElementById('importWordInput').disabled = true;
+    document.getElementById('importBackToTitleBtn').style.display = 'none';
+
+    const total = words.length;
+    const results = [];
+    const CONCURRENCY = 5;
+
+    for (let i = 0; i < words.length; i += CONCURRENCY) {
+      const batch = words.slice(i, i + CONCURRENCY);
+      const batchPromises = batch.map(w => completeSingleWord(w, apiKey));
+      const batchResults = await Promise.all(batchPromises);
+      for (const r of batchResults) {
+        results.push(r);
+        const pct = Math.round(results.length / total * 100);
+        document.getElementById('importAIProgressBar').style.width = pct + '%';
+        document.getElementById('importAIProgressText').textContent = results.length + ' / ' + total;
+      }
+    }
+
+    importState.completeResults = results;
+
+    document.getElementById('importAIProgress').style.display = 'none';
+    document.getElementById('importAIResults').style.display = 'block';
+    renderAIResults(results);
+  });
+
+  async function completeSingleWord(word, apiKey) {
+    const prompt = '你是英语单词教学专家。请为单词 "' + word + '" 生成完整的单词教学卡片内容。\n\n要求：\n1. **音标**: 英式音标，用 // 包裹\n2. **词性**: 如 v., n., adj., adv., prep. 等，必要时用 / 表示多词性\n3. **中文释义**: 核心释义，1-2个关键义项\n4. **核心概念**: 用4-8个字概括这个词最本质的用法/场景\n5. **例句**: 2个地道英语例句，带中文翻译，用 JSON 数组\n6. **搭配**: 2-3个常见搭配用法\n\n请严格按 JSON 格式回复，不要包含其他内容：\n{\n  "word": "' + word + '",\n  "phonetic": "/.../",\n  "pos": "v.",\n  "definition": "中文释义",\n  "coreConcept": "核心概念几个字",\n  "examples": ["例1", "例2"],\n  "collocations": ["搭配1", "搭配2"]\n}';
+
+    try {
+      const resp = await fetch(AI_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.3,
+          max_tokens: 1000,
+        }),
+      });
+      if (!resp.ok) {
+        return { word, success: false, error: 'API 错误 (' + resp.status + ')' };
+      }
+      const data = await resp.json();
+      const content = data.choices?.[0]?.message?.content || '';
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) return { word, success: false, error: 'AI 响应格式异常' };
+      const parsed = JSON.parse(jsonMatch[0]);
+      return {
+        word,
+        success: true,
+        data: {
+          word: parsed.word || word,
+          phonetic: parsed.phonetic || '',
+          pos: parsed.pos || '',
+          definition: parsed.definition || '',
+          coreConcept: parsed.coreConcept || '',
+          examples: Array.isArray(parsed.examples) ? parsed.examples : [],
+          collocations: Array.isArray(parsed.collocations) ? parsed.collocations : [],
+        }
+      };
+    } catch (e) {
+      return { word, success: false, error: '请求失败: ' + e.message };
+    }
+  }
+
+  function renderAIResults(results) {
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+    document.getElementById('importResultSummary').textContent =
+      '✅ 成功: ' + successCount + ' 个 · ❌ 失败: ' + failCount + ' 个';
+
+    const list = document.getElementById('importResultList');
+    list.innerHTML = '';
+    results.forEach(r => {
+      const item = document.createElement('div');
+      item.className = 'import-result-item ' + (r.success ? 'success' : 'fail');
+
+      let html = '<div class="import-result-header">' +
+        '<span class="import-result-word">' + escapeHtml(r.word) + '</span>' +
+        (r.success ? '<span>✅</span>' : '<span>❌</span>') +
+        '</div>';
+
+      if (r.success && r.data) {
+        const d = r.data;
+        html += '<div class="import-result-body">' +
+          (d.phonetic ? '<span class="phonetic">' + escapeHtml(d.phonetic) + '</span>' : '') +
+          (d.pos ? '<span class="pos">' + escapeHtml(d.pos) + '</span>' : '') +
+          (d.definition ? '<span class="def">' + escapeHtml(d.definition) + '</span>' : '') +
+          '</div>';
+      } else if (!r.success) {
+        html += '<div class="import-result-body" style="color:rgba(231,76,60,0.5);">' + escapeHtml(r.error || '') + '</div>';
+      }
+
+      item.innerHTML = html;
+      list.appendChild(item);
+    });
+  }
+
+  // 保存
+  document.getElementById('importSaveBtn').addEventListener('click', () => {
+    const results = importState.completeResults;
+    const words = [];
+    for (const r of results) {
+      if (!r.success || !r.data) continue;
+      const d = r.data;
+      words.push({
+        id: d.word.toLowerCase().replace(/[^a-z0-9]/g, '_'),
+        word: d.word,
+        pos: d.pos,
+        definition: d.definition,
+        coreConcept: d.coreConcept,
+        examples: d.examples,
+        collocations: d.collocations,
+        phonetic: d.phonetic,
+      });
+    }
+
+    if (words.length === 0) { alert('没有成功补全的单词，无法保存'); return; }
+
+    if (importMode === 'custom_book') {
+      // === 自定义词书模式 ===
+      const books = getCustomBooks();
+      const newBook = {
+        id: 'custom_' + Date.now(),
+        title: importState.articleTitle,
+        words: words,
+        createdAt: Date.now(),
+      };
+      books.push(newBook);
+      saveCustomBooks(books);
+
+      document.getElementById('importAIResults').style.display = 'none';
+      document.getElementById('importDone').style.display = 'block';
+      document.getElementById('importDone').querySelector('.import-label').textContent =
+        '✅ 词书「' + importState.articleTitle + '」已保存 ' + words.length + ' 个单词';
+      document.getElementById('importDoneBackBtn').textContent = '✓ 返回首页';
+      // 更新保存按钮文本
+      document.getElementById('importSaveBtn').textContent = '💾 保 存 为 独 立 词 书';
+    } else {
+      // === 阅读篇目模式 ===
+      const articles = getReadingArticles();
+      let article;
+
+      if (importState.sourceArticleId) {
+        // 追加到已有篇目
+        article = articles.find(a => a.id === importState.sourceArticleId);
+        if (article) {
+          article.words.push(...words);
+        }
+      } else {
+        // 新建篇目
+        article = {
+          id: 'reading_' + Date.now(),
+          title: importState.articleTitle,
+          words: words,
+          createdAt: Date.now(),
+        };
+        articles.push(article);
+      }
+
+      saveReadingArticles(articles);
+
+      document.getElementById('importAIResults').style.display = 'none';
+      document.getElementById('importDone').style.display = 'block';
+      document.getElementById('importDone').querySelector('.import-label').textContent =
+        '✅ 「' + importState.articleTitle + '」已保存 ' + words.length + ' 个单词';
+      document.getElementById('importDoneBackBtn').textContent = '✓ 确认';
+    }
+  });
+
+  // 继续录入
+  document.getElementById('importContinueAddBtn').addEventListener('click', () => {
+    document.getElementById('importAIResults').style.display = 'none';
+    document.getElementById('importStartAIBtn').style.display = 'block';
+    document.getElementById('importAddWordBtn').style.display = 'block';
+    document.getElementById('importWordInput').disabled = false;
+    document.getElementById('importBackToTitleBtn').style.display = 'block';
+    // 清除旧的 completeResults，保留 sourceArticleId
+    importState.completeResults = [];
+    importState.rawWords = [];
+    updateWordTags();
+    updateAIBtn();
+    document.getElementById('importWordInput').focus();
+  });
+
+  // 完成返回
+  document.getElementById('importDoneBackBtn').addEventListener('click', () => {
+    document.getElementById('importPanel').classList.remove('showing');
+    if (importMode === 'custom_book') {
+      // 自定义词书 → 返回首页，刷新词书列表
+      document.getElementById('revealedOverlay').classList.add('showing');
+      renderCustomBookRows();
+    } else {
+      // 阅读篇目 → 返回篇目选择
+      document.getElementById('articleSelector').classList.add('showing');
+      renderArticleList();
+    }
+    // 重置录入状态
+    importState = { articleTitle: '', rawWords: [], completeResults: [], sourceArticleId: '' };
+    resetImportToTitle();
+    document.getElementById('importStartAIBtn').style.display = 'block';
+    document.getElementById('importAddWordBtn').style.display = 'block';
+    document.getElementById('importWordInput').disabled = false;
+    document.getElementById('importBackToTitleBtn').style.display = 'block';
+    // 恢复保存按钮文本
+    document.getElementById('importSaveBtn').textContent = '💾 保 存 到 阅 读 生 词 簿';
+  });
+
+  // 取消 / 关闭 — 统一返回首页
+  document.getElementById('importCancelBtn').addEventListener('click', () => {
+    document.getElementById('importPanel').classList.remove('showing');
+    document.getElementById('revealedOverlay').classList.add('showing');
+    resetImportState();
+  });
+  document.getElementById('importClose').addEventListener('click', () => {
+    document.getElementById('importPanel').classList.remove('showing');
+    document.getElementById('revealedOverlay').classList.add('showing');
+    resetImportState();
+  });
+
+  function resetImportState() {
+    importState = { articleTitle: '', rawWords: [], completeResults: [], sourceArticleId: '' };
+    resetImportToTitle();
+    document.getElementById('importStartAIBtn').style.display = 'block';
+    document.getElementById('importAddWordBtn').style.display = 'block';
+    document.getElementById('importWordInput').disabled = false;
+    document.getElementById('importBackToTitleBtn').style.display = 'block';
+    document.getElementById('importSaveBtn').textContent = '💾 保 存 到 阅 读 生 词 簿';
+  }
+
+  // ---- 续录（从篇目列表点击编辑按钮） ----
+  function startAddWords(article) {
+    document.getElementById('articleSelector').classList.remove('showing');
+    openImportPanel(article);
+  }
+
+
+  // =====================================================
+  //  短语积累面板（数据源：a4paper_phrases localStorage）
+  // =====================================================
+  const PHRASE_STORAGE_KEY = 'a4paper_phrases';
+
+  function getPhrases() {
+    try {
+      const raw = localStorage.getItem(PHRASE_STORAGE_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      // Normalize: handle both 'meaning' (old) and 'definition' (current)
+      return arr.map(p => ({
+        id: p.id || ('phrase_' + Date.now() + '_' + Math.random().toString(36).slice(2,8)),
+        phrase: p.phrase || '',
+        definition: p.definition || p.meaning || '',
+        example: p.example || '',
+        notes: p.notes || '',
+        category: p.category || '',
+        createdAt: p.createdAt || Date.now(),
+      }));
+    } catch(e) { return []; }
+  }
+
+  function savePhrases(phrases) {
+    localStorage.setItem(PHRASE_STORAGE_KEY, JSON.stringify(phrases));
+  }
+
+  function openPhrasePanel() {
+    document.getElementById('revealedOverlay').classList.remove('showing');
+    document.getElementById('phrasePanel').classList.add('showing');
+    renderPhraseList();
+    setTimeout(() => document.getElementById('phraseInput').focus(), 300);
+  }
+
+  function closePhrasePanel() {
+    document.getElementById('phrasePanel').classList.remove('showing');
+    document.getElementById('revealedOverlay').classList.add('showing');
+    renderCustomBookRows();
+  }
+
+  function renderPhraseList() {
+    const list = document.getElementById('phraseList');
+    const phrases = getPhrases();
+    document.getElementById('phraseCount').textContent = phrases.length + ' 条';
+
+    if (phrases.length === 0) {
+      list.innerHTML = '<div class="phrase-empty">📝<br/>还没有积累短语</div>';
+      return;
+    }
+
+    // 按时间倒序
+    phrases.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+    list.innerHTML = '';
+    phrases.forEach(p => {
+      const item = document.createElement('div');
+      item.className = 'phrase-item';
+
+      const main = document.createElement('div');
+      main.className = 'phrase-item-main';
+      main.innerHTML =
+        `<span class="phrase-item-phrase">${escapeHtml(p.phrase)}</span>` +
+        `<span class="phrase-item-def">${escapeHtml(p.definition || '')}</span>` +
+        `<div class="phrase-item-meta">` +
+          (p.example ? `<span>📖 ${escapeHtml(p.example)}</span>` : '') +
+          (p.notes ? `<span>💡 ${escapeHtml(p.notes)}</span>` : '') +
+          (p.category ? `<span>🏷 ${escapeHtml(p.category)}</span>` : '') +
+          `<span>${new Date(p.createdAt).toLocaleDateString('zh-CN')}</span>` +
+        `</div>`;
+
+      const delBtn = document.createElement('span');
+      delBtn.className = 'phrase-item-delete';
+      delBtn.textContent = '✕';
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!confirm('删除短语「' + p.phrase + '」？')) return;
+        const all = getPhrases().filter(x => x.id !== p.id);
+        savePhrases(all);
+        renderPhraseList();
+      });
+
+      item.appendChild(main);
+      item.appendChild(delBtn);
+
+      // 点击编辑
+      item.addEventListener('click', () => openPhraseEdit(p));
+
+      list.appendChild(item);
+    });
+  }
+
+  function handleAddPhrase() {
+    const input = document.getElementById('phraseInput');
+    const text = input.value.trim();
+    if (!text) return;
+    const phrases = getPhrases();
+    phrases.push({
+      id: 'phrase_' + Date.now(),
+      phrase: text,
+      definition: '',
+      example: '',
+      notes: '',
+      category: '',
+      createdAt: Date.now(),
+    });
+    savePhrases(phrases);
+    input.value = '';
+    renderPhraseList();
+    // Auto open edit for the new phrase
+    setTimeout(() => {
+      const all = getPhrases();
+      const newest = all[all.length - 1];
+      if (newest && newest.phrase === text) openPhraseEdit(newest);
+    }, 100);
+  }
+
+  // AI 补全短语
+  async function handleAiCompletePhrase() {
+    const input = document.getElementById('phraseInput');
+    const text = input.value.trim();
+    if (!text) { alert('请先输入短语'); return; }
+
+    let apiKey = '';
+    try { apiKey = localStorage.getItem('wordsense_api_key') || ''; } catch(e) {}
+    if (!apiKey) {
+      const k = prompt('请输入 DeepSeek API Key（用于 AI 补全短语信息）：');
+      if (!k) return;
+      apiKey = k.trim();
+      if (!apiKey) return;
+      localStorage.setItem('wordsense_api_key', apiKey);
+    }
+
+    const btn = document.getElementById('phraseAiBtn');
+    btn.textContent = '⏳';
+    btn.disabled = true;
+
+    try {
+      const prompt = `你是英语短语教学专家。请为英语短语/习语 "${text}" 生成以下内容：
+
+1. **中文释义**：精确的中文解释，说明短语的实际含义（不是字面意思）
+2. **地道例句**：1个自然的地道英语例句，展示该短语的真实用法，格式："英文句子 — 中文翻译"
+3. **实用备注**：该短语的使用场景、语气、注意事项或记忆技巧（一句话）
+
+请严格按 JSON 格式回复：
+{
+  "phrase": "${text}",
+  "definition": "中文释义",
+  "example": "英文例句 — 中文翻译",
+  "notes": "实用备注一句话"
+}`;
+
+      const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.3,
+          max_tokens: 800,
+        }),
+      });
+
+      if (!resp.ok) throw new Error(`API ${resp.status}`);
+
+      const data = await resp.json();
+      const content = data.choices?.[0]?.message?.content || '';
+      const m = content.match(/\{[\s\S]*\}/);
+      if (!m) throw new Error('格式异常');
+
+      const r = JSON.parse(m[0]);
+      const phrases = getPhrases();
+      phrases.push({
+        id: 'phrase_' + Date.now(),
+        phrase: r.phrase || text,
+        definition: r.definition || '',
+        example: r.example || '',
+        notes: r.notes || '',
+        category: '',
+        createdAt: Date.now(),
+      });
+      savePhrases(phrases);
+      input.value = '';
+      renderPhraseList();
+    } catch(e) {
+      alert('AI 补全失败: ' + (e.message || e));
+    } finally {
+      btn.textContent = '✨ AI';
+      btn.disabled = false;
+    }
+  }
+
+  // 编辑短语弹窗
+  function openPhraseEdit(entry) {
+    // Remove existing edit overlay
+    const existing = document.querySelector('.phrase-edit-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'phrase-edit-overlay';
+    overlay.innerHTML = `
+      <div class="phrase-edit-modal">
+        <div class="phrase-edit-title">编 辑 短 语</div>
+        <label class="phrase-edit-label">短 语</label>
+        <input class="phrase-edit-input" id="phraseEditPhrase" value="${escapeHtml(entry.phrase)}" />
+        <label class="phrase-edit-label">释 义</label>
+        <input class="phrase-edit-input" id="phraseEditDef" value="${escapeHtml(entry.definition || '')}" placeholder="中文释义" />
+        <label class="phrase-edit-label">例 句</label>
+        <textarea class="phrase-edit-textarea" id="phraseEditExample" placeholder="例句 — 翻译">${escapeHtml(entry.example || '')}</textarea>
+        <label class="phrase-edit-label">备 注</label>
+        <input class="phrase-edit-input" id="phraseEditNotes" value="${escapeHtml(entry.notes || '')}" placeholder="使用场景、注意事项" />
+        <div class="phrase-edit-actions">
+          <button class="phrase-edit-btn cancel" id="phraseEditCancel">取消</button>
+          <button class="phrase-edit-btn save" id="phraseEditSave">保存</button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(overlay);
+
+    const closeEdit = () => overlay.remove();
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeEdit();
+    });
+    document.getElementById('phraseEditCancel').addEventListener('click', closeEdit);
+
+    document.getElementById('phraseEditSave').addEventListener('click', () => {
+      const p = document.getElementById('phraseEditPhrase').value.trim();
+      const d = document.getElementById('phraseEditDef').value.trim();
+      if (!p) { alert('短语不能为空'); return; }
+      const phrases = getPhrases();
+      const idx = phrases.findIndex(x => x.id === entry.id);
+      if (idx !== -1) {
+        phrases[idx] = {
+          ...phrases[idx],
+          phrase: p,
+          definition: d,
+          example: document.getElementById('phraseEditExample').value.trim(),
+          notes: document.getElementById('phraseEditNotes').value.trim(),
+        };
+        savePhrases(phrases);
+      }
+      closeEdit();
+      renderPhraseList();
+    });
+
+    // Esc 关闭
+    const escHandler = (e) => { if (e.key === 'Escape') { closeEdit(); document.removeEventListener('keydown', escHandler); } };
+    document.addEventListener('keydown', escHandler);
+  }
+
+  // 事件绑定
+  document.getElementById('phraseClose').addEventListener('click', closePhrasePanel);
+  document.getElementById('phrasePanel').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('phrasePanel')) closePhrasePanel();
+  });
+
+  // =====================================================
+  //  学习流程状态机（原生JS版）
+  // =====================================================
+
+  // 状态
+  let learnState = {
+    phase: 'idle',        // learn | write | recall | group-review | prev-group-review | page-review | page-done | idle
+    pageWords: [],
+    currentGroup: 0,       // 0-4
+    currentWordInGroup: 0, // 0-4
+    globalWordIndex: 0,    // 0-24
+    currentWord: null,
+    a4Words: [],
+    a4WriteTarget: null,
+    groupReviewQueue: [],
+    groupReviewIndex: 0,
+    prevGroupReviewQueue: [],
+    prevGroupReviewIndex: 0,
+    pageReviewQueue: [],
+    pageReviewIndex: 0,
+    history: [],
+    errorWords: [],
+  };
+
+  function getGroupWords(groupIdx, pageWords) {
+    const start = groupIdx * 5;
+    return pageWords.slice(start, start + 5);
+  }
+
+  function getPageWordsByIndex(bookId, pageIndex) {
+    // 自定义词书
+    if (bookId && bookId.startsWith('custom_')) {
+      const book = getCustomBookById(bookId);
+      if (!book || !book.words) return [];
+      const start = pageIndex * PAGE_SIZE;
+      return book.words.slice(start, start + PAGE_SIZE);
+    }
+    // 阅读篇目
+    if (bookId && bookId.startsWith('reading_')) {
+      const article = getArticleById(bookId);
+      if (!article || !article.words) return [];
+      const start = pageIndex * PAGE_SIZE;
+      return article.words.slice(start, start + PAGE_SIZE);
+    }
+    // IELTS词汇
+    if (typeof ieltsCoreWords === 'undefined') return [];
+    const start = pageIndex * PAGE_SIZE;
+    return ieltsCoreWords.slice(start, start + PAGE_SIZE);
+  }
+
+  // 显示学习面板
+  function showLearnPanel() {
+    document.getElementById('pageSelector').classList.remove('showing');
+    document.getElementById('learnPanel').classList.add('showing');
+  }
+
+  function hideLearnPanel() {
+    document.getElementById('learnPanel').classList.remove('showing');
+  }
+
+  // 更新进度条
+  function updateProgress(current, total) {
+    const bar = document.getElementById('learnProgressBar');
+    if (bar) bar.style.width = (total > 0 ? (current / total * 100) : 0) + '%';
+  }
+
+  // 渲染当前阶段
+  function renderLearnStage() {
+    const area = document.getElementById('learnStageArea');
+    const s = learnState;
+    if (!area) return;
+
+    updateProgress(s.globalWordIndex, Math.min(PAGE_SIZE, s.pageWords.length));
+
+    // 判断结果展示
+    if (s._judgmentResult) {
+      renderJudgmentResult(area, s);
+      renderA4Paper(s);
+      return;
+    }
+
+    switch (s.phase) {
+      case 'learn':
+        renderWordCard(area, s);
+        break;
+      case 'write':
+        renderWriteStage(area, s);
+        break;
+      case 'recall':
+        renderRecallInput(area, s, 'single');
+        break;
+      case 'group-review':
+        renderRecallInput(area, s, 'group-review');
+        break;
+      case 'prev-group-review':
+        renderRecallInput(area, s, 'prev-group-review');
+        break;
+      case 'page-review':
+        renderRecallInput(area, s, 'page-review');
+        break;
+      case 'page-done':
+        renderPageDone(area, s);
+        break;
+      default:
+        area.innerHTML = '<div class="word-card"><p style="color:rgba(200,170,140,0.3)">准备就绪</p></div>';
+    }
+    // 非完成/空闲阶段都渲染 A4 纸
+    if (s.phase !== 'page-done' && s.phase !== 'idle') {
+      renderA4Paper(s);
+    }
+  }
+
+  // WordCard 渲染
+  function renderWordCard(area, s) {
+    const w = s.currentWord;
+    if (!w) { area.innerHTML = ''; return; }
+    area.innerHTML = `
+      <div class="learn-phase-badge">学 习 · 第 ${s.globalWordIndex + 1}/${Math.min(PAGE_SIZE, s.pageWords.length)} 词</div>
+      <div class="word-card">
+        <div class="word-text">${w.word}
+          <span class="speak-btn-learn" onclick="speakWord('${w.word.replace(/'/g, "\\'")}')">🔊</span>
+        </div>
+        <div class="word-phonetic">${w.phonetic || ''}</div>
+        <div class="word-pos">${w.pos || ''}</div>
+        <div class="word-definition">${w.definition}</div>
+        ${w.coreConcept ? `<div class="word-core-concept">核心概念：${w.coreConcept}</div>` : ''}
+        ${w.collocations && w.collocations.length ? `<div class="collocations">${w.collocations.map(c => `<span>${c}</span>`).join('')}</div>` : ''}
+        <br>
+        <button class="learn-btn" onclick="handleFinishLearning()">已掌握 →</button>
+      </div>
+    `;
+  }
+
+  // 拼写阶段 (write) — 工作区只显示词信息，输入框在 A4 纸上
+  function renderWriteStage(area, s) {
+    const w = s.currentWord;
+    if (!w) { area.innerHTML = ''; return; }
+    area.innerHTML = `
+      <div class="learn-phase-badge">书 写 · 第 ${s.globalWordIndex + 1}/${Math.min(PAGE_SIZE, s.pageWords.length)} 词</div>
+      <div class="word-card" style="padding:10px 20px;">
+        <div class="write-to-a4-label">将单词写到 A4 纸 <span class="input-lang-badge">EN</span></div>
+        <div class="word-to-write">
+          <span class="write-word-english">${w.word}</span>
+          <span class="speak-btn-learn" onclick="speakWord('${w.word.replace(/'/g, "\\'")}')">🔊</span>
+          <span class="write-word-pos">${w.pos || ''}</span>
+          <span class="write-word-def">${w.definition}</span>
+        </div>
+        <div class="write-to-a4-hint">
+          <span class="progress-badge">第 ${s.globalWordIndex + 1} / ${Math.min(PAGE_SIZE, s.pageWords.length)} 词</span>
+          <span>在下方 A4 纸输入英文，按 <span class="key-hint">Enter</span> 确认</span>
+        </div>
+      </div>
+    `;
+  }
+
+  // 回忆输入
+  function renderRecallInput(area, s, mode) {
+    let w = s.currentWord;
+    // 复习模式取对应队列中的词
+    if (mode === 'group-review' && s.groupReviewQueue.length > 0) {
+      w = s.groupReviewQueue[s.groupReviewIndex];
+    } else if (mode === 'prev-group-review' && s.prevGroupReviewQueue.length > 0) {
+      w = s.prevGroupReviewQueue[s.prevGroupReviewIndex];
+    } else if (mode === 'page-review' && s.pageReviewQueue.length > 0) {
+      w = s.pageReviewQueue[s.pageReviewIndex];
+    }
+    if (!w) { area.innerHTML = ''; return; }
+
+    let phaseLabel = '回 忆';
+    if (mode === 'group-review') phaseLabel = '组 复 习';
+    else if (mode === 'prev-group-review') phaseLabel = '跨 组 复 习';
+    else if (mode === 'page-review') phaseLabel = '页 复 习';
+
+    area.innerHTML = `
+      <div class="learn-phase-badge">${phaseLabel}</div>
+      <div class="recall-area">
+        <div class="recall-word">${w.word}
+          <span class="speak-btn-learn" onclick="speakWord('${w.word.replace(/'/g, "\\'")}')">🔊</span>
+        </div>
+        <div class="recall-label">请输入中文释义</div>
+        <div class="recall-input-group">
+          <input type="text" id="recallInput" placeholder="输入中文释义..." autofocus
+            onkeydown="if(event.key==='Enter') handleJudgeRecall()">
+        </div>
+        <div class="recall-hint">按 Enter 提交判断</div>
+      </div>
+    `;
+    setTimeout(() => {
+      const inp = document.getElementById('recallInput');
+      if (inp) inp.focus();
+    }, 100);
+  }
+
+  // 判断结果渲染
+  function renderJudgmentResult(area, s) {
+    const jr = s._judgmentResult;
+    const w = jr.word;
+    if (!w) { area.innerHTML = ''; return; }
+    const isCorrect = jr.correct;
+
+    area.innerHTML = `
+      <div class="judgment-result">
+        <div class="result-icon ${isCorrect ? 'correct' : 'wrong'}">${isCorrect ? '✓' : '✗'}</div>
+        <div class="result-text">${isCorrect ? '正确！' : '需要再看看'}</div>
+        <div class="word-text" style="font-size:28px;margin:12px 0;">${w.word}</div>
+        ${jr.detail ? `<div class="result-detail">${jr.detail}</div>` : ''}
+        <div class="correct-answer">${w.definition}</div>
+        ${w.coreConcept ? `<div class="correct-def">核心概念：${w.coreConcept}</div>` : ''}
+        <button class="learn-btn" onclick="handleContinueAfterJudgment()">继续 →</button>
+      </div>
+    `;
+  }
+
+  // 完成页
+  function renderPageDone(area, s) {
+    area.innerHTML = `
+      <div class="page-done-view">
+        <div class="done-icon">✦</div>
+        <div class="done-text">本页学习完成！</div>
+        <div class="done-sub">${s.history.filter(h => h.correct).length}/${s.history.length} 正确</div>
+        <button class="learn-btn" onclick="handlePageDoneContinue()">继续</button>
+      </div>
+    `;
+  }
+
+  // ============== A4 纸渲染 ==============
+  function renderA4Paper(s) {
+    const body = document.getElementById('a4Body');
+    const countEl = document.getElementById('a4WordCount');
+    if (!body) return;
+
+    const totalWords = Math.min(PAGE_SIZE, s.pageWords.length);
+    if (countEl) countEl.textContent = s.a4Words.length + ' / ' + totalWords;
+
+    const isReviewPhase = s.phase === 'group-review' || s.phase === 'prev-group-review' || s.phase === 'page-review';
+    const isWritePhase = s.phase === 'write';
+
+    // 构建复习标记表
+    const reviewMarks = {};
+    if (isReviewPhase) {
+      s.history.forEach(h => {
+        reviewMarks[h.wordId] = h.correct ? 'correct' : 'wrong';
+      });
+    }
+
+    let html = '';
+    for (let gi = 0; gi < 5; gi++) {
+      const groupStart = gi * 5;
+      const isCurrentGroup = (gi === s.currentGroup);
+      html += `<div class="a4-group${isCurrentGroup ? ' current' : ''}">`;
+      html += '<div class="a4-row">';
+      // 上行 3 个词
+      for (let si = 0; si < 3; si++) {
+        html += renderA4Slot(s, gi, si, groupStart, isWritePhase, reviewMarks);
+      }
+      html += '</div><div class="a4-row a4-row-shift">';
+      // 下行 2 个词 — 内层2/3容器居中
+      html += '<div class="a4-shift-inner">';
+      for (let si = 3; si < 5; si++) {
+        html += renderA4Slot(s, gi, si, groupStart, isWritePhase, reviewMarks);
+      }
+      html += '</div></div></div>';
+    }
+    body.innerHTML = html;
+
+    // 书写阶段自动聚焦 A4 输入框
+    if (isWritePhase) {
+      setTimeout(() => {
+        const inp = document.getElementById('a4WriteInput');
+        if (inp) inp.focus();
+      }, 50);
+    }
+  }
+
+  function renderA4Slot(s, gi, si, groupStart, isWritePhase, reviewMarks) {
+    const wordIndex = groupStart + si;
+
+    // 书写阶段：当前位置是输入框
+    if (isWritePhase && gi === s.currentGroup && si === s.currentWordInGroup && s.a4WriteTarget) {
+      return `<div class="a4-slot a4-slot-input-wrapper">
+        <span class="a4-input-lang-hint">A/a</span>
+        <input type="text" id="a4WriteInput" class="a4-slot-input" placeholder=""
+          onkeydown="if(event.key==='Enter') handleConfirmWrite()"
+          autocomplete="off" inputmode="text" lang="en"
+          autocapitalize="off" autocorrect="off" spellcheck="false">
+        <span class="a4-spelling-error" id="a4SpellingErr"></span>
+      </div>`;
+    }
+
+    // 词已写到 A4 上
+    if (wordIndex < s.a4Words.length) {
+      const w = s.a4Words[wordIndex];
+      if (!w) return '<div class="a4-slot empty"></div>';
+      const mark = reviewMarks[w.id] || null;
+      const isCorrect = mark === 'correct';
+      const isWrong = mark === 'wrong';
+      const cls = 'a4-slot filled' + (isCorrect ? ' a4-slot-correct' : '') + (isWrong ? ' a4-slot-wrong' : '');
+      const title = isWrong ? `title="${w.word} — ${w.pos} ${w.definition}${w.examples && w.examples[0] ? '&#10;&#10;📖 ' + w.examples[0].replace(/"/g, '&quot;') : ''}"` : '';
+      return `<div class="${cls}" ${title}>
+        <span class="a4-slot-text">${w.word}</span>
+        ${isCorrect ? '<span class="a4-slot-dot a4-slot-dot-correct"></span>' : ''}
+        ${isWrong ? '<span class="a4-slot-dot a4-slot-dot-wrong"></span>' : ''}
+      </div>`;
+    }
+
+    // 空位
+    return '<div class="a4-slot empty"></div>';
+  }
+
+  // ============== 状态机操作 ==============
+
+  function handleFinishLearning() {
+    const s = learnState;
+    if (!s.currentWord || s.phase !== 'learn') return;
+    s.phase = 'write';
+    s.a4WriteTarget = s.currentWord;
+    renderLearnStage();
+    saveSession();  // 🦐 进入书写前保存
+  }
+
+  function handleConfirmWrite() {
+    const input = document.getElementById('a4WriteInput');
+    if (!input) return;
+    const text = input.value.trim();
+    const s = learnState;
+    const target = s.currentWord;
+    if (!target) return;
+
+    const normalized = text.toLowerCase();
+    const expected = target.word.toLowerCase();
+
+    if (normalized !== expected) {
+      input.classList.add('error');
+      input.placeholder = target.word;
+      input.value = '';
+      // 显示错误提示
+      const errEl = document.getElementById('a4SpellingErr');
+      if (errEl) errEl.textContent = '✗ ' + target.word;
+      setTimeout(() => {
+        input.classList.remove('error');
+        input.placeholder = '';
+        const e = document.getElementById('a4SpellingErr');
+        if (e) e.textContent = '';
+      }, 2500);
+      return;
+    }
+
+    input.classList.remove('error');
+    const errEl = document.getElementById('a4SpellingErr');
+    if (errEl) errEl.textContent = '';
+
+    s.a4Words.push(target);
+    s.phase = 'recall';
+    renderLearnStage();
+  }
+
+  async function handleJudgeRecall() {
+    const input = document.getElementById('recallInput');
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+
+    const s = learnState;
+    let w = s.currentWord;
+    let reviewMode = 'single';
+
+    if (s.phase === 'group-review' && s.groupReviewQueue.length > 0) {
+      w = s.groupReviewQueue[s.groupReviewIndex];
+      reviewMode = 'group-review';
+    } else if (s.phase === 'prev-group-review' && s.prevGroupReviewQueue.length > 0) {
+      w = s.prevGroupReviewQueue[s.prevGroupReviewIndex];
+      reviewMode = 'prev-group-review';
+    } else if (s.phase === 'page-review' && s.pageReviewQueue.length > 0) {
+      w = s.pageReviewQueue[s.pageReviewIndex];
+      reviewMode = 'page-review';
+    }
+
+    if (!w) return;
+
+    // 本地judge
+    const judgment = localJudge(w, text);
+    const correct = judgment.correct;
+    const detail = judgment.errorDetail || '';
+
+    // 记录历史
+    const s2 = learnState;
+    s2.history.push({
+      wordId: w.id,
+      correct: correct,
+      userInput: text,
+      errorDetail: detail,
+      timestamp: Date.now()
+    });
+    if (!correct) {
+      s2.errorWords.push({ word: w, detail: detail });
+    }
+
+    // 根据当前模式处理后续状态
+    if (reviewMode === 'single') {
+      // 回忆 -> 下一词
+      const nextWordInGroup = s2.currentWordInGroup + 1;
+      const nextGlobal = s2.globalWordIndex + 1;
+      if (nextWordInGroup >= 5) {
+        // 组内5词完成 -> 进入组复习
+        const groupWords = getGroupWords(s2.currentGroup, s2.pageWords);
+        s2.phase = 'group-review';
+        s2.groupReviewQueue = groupWords;
+        s2.groupReviewIndex = 0;
+      } else {
+        s2.phase = 'learn';
+        s2.currentWordInGroup = nextWordInGroup;
+        s2.globalWordIndex = nextGlobal;
+        s2.currentWord = s2.pageWords[nextGlobal];
+      }
+    } else if (reviewMode === 'group-review') {
+      handleCompleteGroupReview(correct);
+    } else if (reviewMode === 'prev-group-review') {
+      handleCompletePrevGroupReview(correct);
+    } else if (reviewMode === 'page-review') {
+      handleCompletePageReview(correct);
+    }
+
+    // 显示判断结果
+    learnState._judgmentResult = { correct, word: w, userInput: text, detail };
+    input.value = '';
+    renderLearnStage();
+    saveSession();  // 🦐 每一步都记忆
+  }
+
+  function handleContinueAfterJudgment() {
+    delete learnState._judgmentResult;
+    renderLearnStage();
+    saveSession();  // 🦐 继续后保存新位置
+  }
+
+  function handleCompleteGroupReview(correct) {
+    const s = learnState;
+    const nextIdx = s.groupReviewIndex + 1;
+    if (nextIdx >= s.groupReviewQueue.length) {
+      // 组复习完成
+      if (s.currentGroup > 0) {
+        // 进入跨组复习（复习上一组）
+        const prevGroupIdx = s.currentGroup - 1;
+        const prevGroupWords = getGroupWords(prevGroupIdx, s.pageWords);
+        s.phase = 'prev-group-review';
+        s.prevGroupReviewQueue = prevGroupWords;
+        s.prevGroupReviewIndex = 0;
+      } else {
+        // 第一组 -> 下一组学习
+        const nextGroup = s.currentGroup + 1;
+        const nextGlobal = s.a4Words.length;
+        s.phase = 'learn';
+        s.currentGroup = nextGroup;
+        s.currentWordInGroup = 0;
+        s.globalWordIndex = nextGlobal;
+        s.currentWord = s.pageWords[nextGlobal];
+      }
+      s.groupReviewQueue = [];
+      s.groupReviewIndex = 0;
+    } else {
+      s.groupReviewIndex = nextIdx;
+    }
+  }
+
+  function handleCompletePrevGroupReview(correct) {
+    const s = learnState;
+    const nextIdx = s.prevGroupReviewIndex + 1;
+    if (nextIdx >= s.prevGroupReviewQueue.length) {
+      const nextGroup = s.currentGroup + 1;
+      const nextGlobal = s.a4Words.length;
+      const totalInPage = Math.min(PAGE_SIZE, s.pageWords.length);
+      if (nextGroup < totalInPage / 5) {
+        s.phase = 'learn';
+        s.currentGroup = nextGroup;
+        s.currentWordInGroup = 0;
+        s.globalWordIndex = nextGlobal;
+        s.currentWord = s.pageWords[nextGlobal];
+      } else {
+        // 全部学完 -> 整页复习
+        s.phase = 'page-review';
+        s.pageReviewQueue = [...s.a4Words];
+        s.pageReviewIndex = 0;
+      }
+      s.prevGroupReviewQueue = [];
+      s.prevGroupReviewIndex = 0;
+    } else {
+      s.prevGroupReviewIndex = nextIdx;
+    }
+  }
+
+  function handleCompletePageReview(correct) {
+    const s = learnState;
+    const nextIdx = s.pageReviewIndex + 1;
+    if (nextIdx >= s.pageReviewQueue.length) {
+      s.phase = 'page-done';
+      s.pageReviewQueue = [];
+      s.pageReviewIndex = 0;
+    } else {
+      s.pageReviewIndex = nextIdx;
+    }
+  }
+
+  function handlePageDoneContinue() {
+    // 标记当前页码完成
+    const pageNum = currentPageIdx + 1;
+    const bulb = document.querySelector(`.page-bulb[data-page="${pageNum}"]`);
+    if (bulb) bulb.classList.add('completed');
+    // 持久化完成状态
+    saveCompletedPages();
+
+    hideLearnPanel();
+    showPageSelector(window._pageSource);
+    // 重置状态
+    resetLearnState();
+    clearSession();  // 🦐 本页完成，清除记忆
+  }
+
+  function resetLearnState() {
+    learnState = {
+      phase: 'idle',
+      pageWords: [],
+      currentGroup: 0,
+      currentWordInGroup: 0,
+      globalWordIndex: 0,
+      currentWord: null,
+      a4Words: [],
+      a4WriteTarget: null,
+      groupReviewQueue: [],
+      groupReviewIndex: 0,
+      prevGroupReviewQueue: [],
+      prevGroupReviewIndex: 0,
+      pageReviewQueue: [],
+      pageReviewIndex: 0,
+      history: [],
+      errorWords: [],
+    };
+  }
+
+  // ============== 页码完成状态持久化 ==============
+  // ============== 会话持久化（完整状态记忆）==============
+  const SESSION_KEY = 'a4paper_session';
+
+  function saveSession() {
+    const s = learnState;
+    if (!s || s.phase === 'idle' || s.phase === 'page-done') return;
+    const session = {
+      bookId: currentBookId,
+      pageIdx: currentPageIdx,
+      currentGroup: s.currentGroup,
+      currentWordInGroup: s.currentWordInGroup,
+      globalWordIndex: s.globalWordIndex,
+      phase: s.phase,
+      a4Words: s.a4Words,
+      history: s.history,
+      errorWords: s.errorWords,
+      groupReviewQueue: s.groupReviewQueue,
+      groupReviewIndex: s.groupReviewIndex,
+      prevGroupReviewQueue: s.prevGroupReviewQueue,
+      prevGroupReviewIndex: s.prevGroupReviewIndex,
+      pageReviewQueue: s.pageReviewQueue,
+      pageReviewIndex: s.pageReviewIndex,
+      currentWord: s.currentWord,
+      a4WriteTarget: s.a4WriteTarget || null,
+      _judgmentResult: s._judgmentResult || null,
+      timestamp: Date.now()
+    };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  }
+
+  function loadSession() {
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      if (!raw) return null;
+      const s = JSON.parse(raw);
+      if (!s || !s.bookId) return null;
+      return s;
+    } catch(e) { return null; }
+  }
+
+  function clearSession() {
+    localStorage.removeItem(SESSION_KEY);
+  }
+
+  function getSavedPageForBook(bookId) {
+    const s = loadSession();
+    if (s && s.bookId === bookId) return s.pageIdx;
+    return null;
+  }
+
+  function getCompletedKey() {
+    return 'a4_completed_pages_' + currentBookId;
+  }
+
+  function saveCompletedPages() {
+    const key = getCompletedKey();
+    const completed = new Set(
+      JSON.parse(localStorage.getItem(key) || '[]')
+    );
+    completed.add(currentPageIdx);
+    localStorage.setItem(key, JSON.stringify([...completed]));
+  }
+
+  function loadCompletedPages() {
+    const key = getCompletedKey();
+    return new Set(
+      JSON.parse(localStorage.getItem(key) || '[]')
+    );
+  }
+
+  // ============== 发音 ==============
+  function speakWord(text) {
+    if ('speechSynthesis' in window) {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'en-US';
+      u.rate = 0.85;
+      speechSynthesis.speak(u);
+    }
+  }
+
+  // ============== 本地judge移植 ==============
+  function localJudge(word, userInput) {
+    if (!userInput.trim() || userInput.trim().length < 2) {
+      return { correct: false, confidence: 0.95, errorType: 'unfamiliar', errorDetail: '没有输入内容' };
+    }
+    if (isUnfamiliarInput(userInput)) {
+      return { correct: false, confidence: 0.95, errorType: 'unfamiliar', errorDetail: '学生表示不认识该单词' };
+    }
+
+    const keywordsMatch = hasCoreKeywordsNative(userInput, word.definition, word.coreConcept || '');
+    const overlapDef = charOverlapNative(userInput, (word.definition || '') + (word.coreConcept || ''));
+
+    if (keywordsMatch && overlapDef >= 0.3) {
+      return { correct: true, confidence: 0.85, errorType: null, correctAnswer: word.coreConcept };
+    }
+    if (keywordsMatch && userInput.length >= 4) {
+      return { correct: true, confidence: 0.70, errorType: null, correctAnswer: word.coreConcept };
+    }
+    if (!keywordsMatch && overlapDef < 0.15 && userInput.length >= 4) {
+      return { correct: false, confidence: 0.7, errorType: 'misunderstanding', errorDetail: '输入与正确释义有明显差距', correctAnswer: word.coreConcept };
+    }
+
+    // 兜底：放宽条件
+    if (userInput.length >= 4 && overlapDef >= 0.15) {
+      return { correct: true, confidence: 0.55, errorType: null, correctAnswer: word.coreConcept };
+    }
+    return { correct: false, confidence: 0.5, errorType: 'misunderstanding', errorDetail: '未能准确理解语义', correctAnswer: word.coreConcept };
+  }
+
+  function isUnfamiliarInput(input) {
+    const keywords = ['不知道','不认识','不会','忘了','想不起来','不记得','没学过','忘记了'];
+    return keywords.some(k => input.includes(k));
+  }
+
+  function hasCoreKeywordsNative(userInput, definition, coreConcept) {
+    const defKw = extractKeywordsNative(definition || '');
+    const conceptKw = extractKeywordsNative(coreConcept || '');
+    const allKw = [...new Set([...defKw, ...conceptKw])].sort((a,b)=>b.length-a.length).slice(0,5);
+    if (allKw.length === 0) return false;
+    const inputSet = new Set(tokenizeNative(userInput));
+    let matchCount = 0;
+    for (const kw of allKw) {
+      if ([...inputSet].some(t => t.includes(kw) || kw.includes(t))) matchCount++;
+      if (userInput.includes(kw) || kw.includes(userInput.replace(/\s/g,''))) matchCount++;
+    }
+    return matchCount >= Math.min(2, allKw.length);
+  }
+
+  function extractKeywordsNative(text) {
+    const stopWords = new Set(['的','了','是','在','和','与','有','为','对','被','把','让','从','到','以','之','这','那','上','下','要','会','能','可','还','也','就','都','而','且','如果','因为','所以','虽然','但是','以及','或者','并']);
+    return text.replace(/[，。！？、；：""''（）【】《》\s,\.!?\?;:\(\)\[\]<>]/g,' ').split(/\s+/).filter(t => t.length >= 2 && !stopWords.has(t));
+  }
+
+  function tokenizeNative(text) {
+    const cleaned = text.replace(/[，。！？、；：""''（）【】《》\s,\.!?\?;:\(\)\[\]<>]/g,' ').toLowerCase();
+    return cleaned.split(/\s+/).filter(t => t.length >= 2);
+  }
+
+  function charOverlapNative(a, b) {
+    const setA = new Set(a), setB = new Set(b);
+    if (setA.size === 0 || setB.size === 0) return 0;
+    let intersection = 0;
+    for (const ch of setA) { if (setB.has(ch)) intersection++; }
+    return intersection / Math.min(setA.size, setB.size);
+  }
+
+  // ============== 开始学习某页 ==============
+  function startLearningPage(pageIndex) {
+    const words = getPageWordsByIndex(currentBookId, pageIndex);
+    if (!words || words.length === 0) {
+      document.getElementById('learnStageArea').innerHTML = '<div class="word-card"><p style="color:rgba(200,170,140,0.3)">该页暂无单词数据</p></div>';
+      showLearnPanel();
+      return;
+    }
+
+    currentPageIdx = pageIndex;
+    resetLearnState();
+    learnState.phase = 'learn';
+    learnState.pageWords = words;
+    learnState.currentWord = words[0];
+    showLearnPanel();
+    renderLearnStage();
+    saveSession();  // 🦐 记忆位置
+  }
+
+  // 🦐 恢复完整学习会话（词已上纸、复习进度、状态全部保留）
+  function resumeLearningSession(session) {
+    const words = getPageWordsByIndex(session.bookId, session.pageIdx);
+    if (!words || words.length === 0) return;
+
+    // 如果有残留状态，先清理
+    hideLearnPanel();
+
+    // 设置全局变量
+    currentBookId = session.bookId;
+    currentPageIdx = session.pageIdx;
+
+    // 恢复完整 learnState
+    learnState = {
+      phase: session.phase || 'learn',
+      pageWords: words,
+      currentGroup: session.currentGroup || 0,
+      currentWordInGroup: session.currentWordInGroup || 0,
+      globalWordIndex: session.globalWordIndex || 0,
+      currentWord: session.currentWord || words[session.globalWordIndex || 0],
+      a4Words: session.a4Words || [],
+      groupReviewQueue: session.groupReviewQueue || [],
+      groupReviewIndex: session.groupReviewIndex || 0,
+      prevGroupReviewQueue: session.prevGroupReviewQueue || [],
+      prevGroupReviewIndex: session.prevGroupReviewIndex || 0,
+      pageReviewQueue: session.pageReviewQueue || [],
+      pageReviewIndex: session.pageReviewIndex || 0,
+      history: session.history || [],
+      errorWords: session.errorWords || [],
+      a4WriteTarget: session.a4WriteTarget || null,
+      _judgmentResult: session._judgmentResult || null,
+    };
+
+    showLearnPanel();
+    renderLearnStage();
+    saveSession();
+  }
+
+  // 学习面板返回按钮
+  document.getElementById('learnBackLink').addEventListener('click', () => {
+    saveSession();  // 🦐 退出前保存位置
+    hideLearnPanel();
+    showPageSelector(window._pageSource);
+    resetLearnState();
+  });
+
+  document.getElementById('learnBackToLamp').addEventListener('click', () => {
+    saveSession();  // 🦐 退出前保存位置
+    hideLearnPanel();
+    // 回到灯泡墙
+    document.getElementById('pageSelector').classList.remove('showing');
+    document.getElementById('revealedOverlay').classList.add('showing');
+    renderCustomBookRows();
+    resetLearnState();
+  });
+
+  console.log('🦐 学习面板已加载');
+</script>
+</body>
+</html>
