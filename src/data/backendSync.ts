@@ -101,16 +101,29 @@ export function importDataFromFile(file: File): Promise<ImportResult> {
  *   自动 Gist 同步
  * ================================================================ */
 
-/** 如果已连接 Gist，自动推送到云端（静默、不弹窗） */
-export async function autoSyncToGist(): Promise<void> {
-  try {
-    const { getStoredToken, pushToGist } = await import('./gistSync');
-    const token = getStoredToken();
-    if (!token) return; // 没连接 Gist，跳过
-    await pushToGist(token);
-  } catch {
-    // 静默失败，不影响用户操作
-  }
+/* ================================================================
+ *   防抖器 — 300ms 内多次调用只执行一次
+ * ================================================================ */
+let autoSyncDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let autoSyncPending = false;
+
+/** 如果已连接 Gist，自动推送到云端（静默、不弹窗，300ms 防抖） */
+export function autoSyncToGist(): void {
+  if (autoSyncDebounceTimer) clearTimeout(autoSyncDebounceTimer);
+  autoSyncDebounceTimer = setTimeout(async () => {
+    if (autoSyncPending) return;
+    autoSyncPending = true;
+    try {
+      const { getStoredToken, pushToGist } = await import('./gistSync');
+      const token = getStoredToken();
+      if (!token) return;
+      await pushToGist(token);
+    } catch {
+      // 静默失败
+    } finally {
+      autoSyncPending = false;
+    }
+  }, 300);
 }
 
 /** 安全写后端（改为 auto-sync，不需传参） */

@@ -114,12 +114,71 @@ async function createGist(token: string, payload: SyncPayload): Promise<string |
   return gist.id;
 }
 
-async function updateGist(gistId: string, token: string, payload: SyncPayload): Promise<boolean> {
-  const res = await githubFetch(`${GITHUB_API}/gists/${gistId}`, token, {
-    method: 'PATCH',
-    body: JSON.stringify({ files: { 'data.json': { content: JSON.stringify(payload, null, 2) } } }),
+/* ================================================================
+ *   Gist 写入锁 — 防止并发 PATCH 导致 409 Conflict
+ * ================================================================ */
+let gistWriteLock: Promise<void> | null = null;
+
+function acquireGistWriteLock(): Promise<() => void> {
+  return new Promise((resolve) => {
+    const waitAndAcquire = async () => {
+      // 等待前一个写入完成
+      if (gistWriteLock) {
+        await gistWriteLock.catch(() => {}); // 忽略前一个的错误
+      }
+      let released = false;
+      const release = () => {
+        if (!released) { released = true; gistWriteLock = null; }
+      };
+      gistWriteLock = new Promise<void>((r) => { /* held until release() */ });
+      resolve(release);
+    };
+    waitAndAcquire();
   });
-  return res.ok;
+}
+
+const MAX_RETRIES = 3;
+const BASE_RETRY_DELAY_MS = 500;
+
+async function updateGist(gistId: string, token: string, payload: SyncPayload): Promise<boolean> {
+  const release = await acquireGistWriteLock();
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const res = await githubFetch(`${GITHUB_API}/gists/${gistId}`, token, {
+        method: 'PATCH',
+        body: JSON.stringify({ files: { 'data.json': { content: JSON.stringify(payload, null, 2) } } }),
+      });
+
+      if (res.ok) {
+        release();
+        return true;
+      }
+
+      // 409 Conflict：重试
+      if (res.status === 409 && attempt < MAX_RETRIES - 1) {
+        const delay = BASE_RETRY_DELAY_MS * Math.pow(2, attempt);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+
+      // 非 409 或重试耗尽
+      release();
+      return false;
+    } catch (e) {
+      // 网络错误也重试
+      if (attempt < MAX_RETRIES - 1) {
+        const delay = BASE_RETRY_DELAY_MS * Math.pow(2, attempt);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      release();
+      return false;
+    }
+  }
+
+  release();
+  return false;
 }
 
 function packLocalData(deviceId: string): SyncPayload {
