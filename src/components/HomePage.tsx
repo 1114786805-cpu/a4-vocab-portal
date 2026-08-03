@@ -98,6 +98,25 @@ export function HomePage({
       <div className="homepage-books-section">
         <h3 className="homepage-section-title">📖 词书</h3>
         <div className="homepage-books">
+          {/* 🦐 异世界入口 — 第一条 */}
+          {onOpenAbyss && (
+            <div
+              className="book-card book-card-nav book-card-abyss"
+              onClick={onOpenAbyss}
+              role="button"
+              tabIndex={0}
+            >
+              <div className="book-card-header">
+                <div className="book-card-title-row">
+                  <h2 className="book-card-title">🕳️ 异世界入口</h2>
+                </div>
+                <div className="book-card-stats">
+                  <span className="book-stat">深渊版 · 怪奇物语主题</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {allBooks.map(book => (
             <BookCard
               key={book.id}
@@ -175,24 +194,6 @@ export function HomePage({
             </div>
           )}
 
-          {/* 🦐 异世界入口 */}
-          {onOpenAbyss && (
-            <div
-              className="book-card book-card-nav book-card-abyss"
-              onClick={onOpenAbyss}
-              role="button"
-              tabIndex={0}
-            >
-              <div className="book-card-header">
-                <div className="book-card-title-row">
-                  <h2 className="book-card-title">🕳️ 异世界入口</h2>
-                </div>
-                <div className="book-card-stats">
-                  <span className="book-stat">深渊版 · 怪奇物语主题</span>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
