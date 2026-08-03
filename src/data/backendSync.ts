@@ -13,12 +13,10 @@
  * ================================================================ */
 const SYNC_KEYS = [
   'a4paper_book_progress_v2',
-  'a4paper_mastery',
-  'a4paper_session_state',
+  'a4paper_mastery_v3',
   'a4paper_deepseek_api_key',
   'a4paper_phrases',
   'a4paper_reading_banks',
-  'a4paper_api_key',
   'a4paper_learning_history',
   'a4paper_error_words',
   'a4paper_progress',

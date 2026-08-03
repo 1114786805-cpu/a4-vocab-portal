@@ -2,7 +2,7 @@
  * 短语词书持久化存储
  */
 
-import { safeBackupWrite, loadWithBackendFallback } from './backendSync';
+import { safeBackupWrite, loadWithBackendFallback, autoSyncToGist } from './backendSync';
 
 const STORAGE_KEY = 'a4paper_phrases';
 const BACKEND_KEY = 'phrases';
@@ -31,6 +31,7 @@ function loadPhrases(): PhraseEntry[] {
 
 function savePhrases(phrases: PhraseEntry[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(phrases));
+  autoSyncToGist();
 }
 
 export function getAllPhrases(): PhraseEntry[] {

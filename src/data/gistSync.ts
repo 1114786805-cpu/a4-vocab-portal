@@ -8,12 +8,10 @@ const FALLBACK_GIST_ID = '3c75ec1e8065f834eeb1898adaa26899';
 const SYNC_KEYS = [
   'a4paper_scanned_books',
   'a4paper_book_progress_v2',
-  'a4paper_mastery',
-  'a4paper_session_state',
+  'a4paper_mastery_v3',
   'a4paper_deepseek_api_key',
   'a4paper_phrases',
   'a4paper_reading_banks',
-  'a4paper_api_key',
   'a4paper_learning_history',
   'a4paper_error_words',
   'a4paper_progress',
@@ -335,6 +333,17 @@ export function getStoredToken(): string | null {
 export function clearStoredToken(): void {
   localStorage.removeItem('a4paper_github_token');
   disconnectGist();
+}
+
+/** 手动设置匿名同步的 Gist ID（无需 Token） */
+export function setManualGistId(gistId: string): void {
+  const deviceId = getOrCreateDeviceId();
+  saveGistConfig(gistId, '', deviceId);
+}
+
+/** 获取当前已知的 Gist ID（用于 UI 展示） */
+export function getKnownGistId(): string | null {
+  return getStoredConfig()?.gistId ?? null;
 }
 
 export { exportAllData, importDataFromFile, safeBackupWrite, loadWithBackendFallback, setSyncUserId, getSyncUserId, clearSyncUserId } from './backendSync';

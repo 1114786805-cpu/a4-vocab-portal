@@ -2927,6 +2927,72 @@ body {
   margin-bottom: 4px;
 }
 
+/* Gist ID 展示 & 手动输入 */
+.settings-gistid-section {
+  margin-top: 8px;
+}
+
+.settings-gistid-label {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.settings-gistid-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.settings-gistid-display code {
+  background: var(--glass-bg);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  color: #58a6ff;
+  word-break: break-all;
+  font-family: 'Consolas', 'SF Mono', monospace;
+}
+
+.settings-btn.small {
+  padding: 5px 10px;
+  font-size: 0.8rem;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.08);
+  color: var(--text-primary);
+  border: 1px solid rgba(255,255,255,0.1);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.settings-btn.small:hover {
+  background: rgba(255,255,255,0.14);
+}
+
+.settings-gistid-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.settings-gistid-row .settings-token-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.settings-btn.secondary {
+  background: rgba(255,255,255,0.08);
+  color: var(--text-primary);
+  border: 1px solid rgba(255,255,255,0.12);
+}
+
+.settings-btn.secondary:hover:not(:disabled) {
+  background: rgba(255,255,255,0.14);
+}
+
 .settings-actions {
   display: flex;
   gap: 12px;

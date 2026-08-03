@@ -11,6 +11,8 @@ import {
   getGistStatus,
   getStoredToken,
   clearStoredToken,
+  setManualGistId as saveManualGistId,
+  getKnownGistId,
 } from '../data/gistSync';
 
 interface SyncSettingsPageProps {
@@ -23,6 +25,7 @@ const SyncSettingsPage: React.FC<SyncSettingsPageProps> = ({ onBack }) => {
   const [message, setMessage] = useState('');
   const [username, setUsername] = useState('');
   const [gistStatus, setGistStatus] = useState(getGistStatus());
+  const [manualGistId, setManualGistId] = useState(getKnownGistId() || '');
 
   useEffect(() => {
     const savedToken = getStoredToken();
@@ -79,6 +82,23 @@ const SyncSettingsPage: React.FC<SyncSettingsPageProps> = ({ onBack }) => {
     setGistStatus({ connected: false });
   };
 
+  const handleUseManualGistId = () => {
+    const gistId = manualGistId.trim();
+    if (!gistId) {
+      setMessage('请输入 Gist ID');
+      return;
+    }
+    if (!/^[a-f0-9]{32}$/i.test(gistId)) {
+      setMessage('Gist ID 格式不正确（32位十六进制字符）');
+      setStatus('error');
+      return;
+    }
+    // 写入 localStorage 的 gistConfig，刷新后 pullFromGistAnonymous 会读到
+    saveManualGistId(gistId);
+    setMessage('已保存 Gist ID，正在刷新…');
+    window.location.reload();
+  };
+
   const handleManualSync = async () => {
     const savedToken = getStoredToken();
     if (!savedToken) {
@@ -123,6 +143,27 @@ const SyncSettingsPage: React.FC<SyncSettingsPageProps> = ({ onBack }) => {
               上次同步: {new Date(gistStatus.lastSyncedAt).toLocaleString('zh-CN')}
             </div>
           )}
+          {/* Gist ID 展示（已连接时） */}
+          {status === 'connected' && gistStatus.gistId && (
+            <div className="settings-gistid-section">
+              <div className="settings-gistid-label">你的 Gist ID</div>
+              <div className="settings-gistid-display">
+                <code>{gistStatus.gistId}</code>
+                <button
+                  className="settings-btn small"
+                  onClick={() => {
+                    navigator.clipboard.writeText(gistStatus.gistId!);
+                    setMessage('已复制 Gist ID');
+                  }}
+                >
+                  📋 复制
+                </button>
+              </div>
+              <p className="settings-hint" style={{ marginTop: 8 }}>
+                在其他设备输入这个 Gist ID 即可匿名同步，无需 GitHub Token。
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Token 输入 */}
@@ -152,6 +193,39 @@ const SyncSettingsPage: React.FC<SyncSettingsPageProps> = ({ onBack }) => {
             disabled={status === 'connected'}
           />
         </div>
+
+        {/* 手动 Gist ID 输入（未连接 Token 时可用） */}
+        {status !== 'connected' && (
+          <div className="settings-section">
+            <h3>手动同步（无需 Token）</h3>
+            <p className="settings-hint">
+              如果已在其他设备上连接过 GitHub，可以在那台设备的同步设置中找到 Gist ID，
+              复制到这里就能实现跨设备数据同步。
+            </p>
+            <div className="settings-gistid-row">
+              <input
+                type="text"
+                className="settings-token-input"
+                placeholder="输入 32 位 Gist ID…"
+                value={manualGistId}
+                onChange={e => setManualGistId(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleUseManualGistId(); }}
+              />
+              <button
+                className="settings-btn secondary"
+                onClick={handleUseManualGistId}
+                disabled={!manualGistId.trim()}
+              >
+                使用此 Gist
+              </button>
+            </div>
+            {manualGistId && (
+              <p className="settings-hint" style={{ marginTop: 4, color: '#888' }}>
+                点击后页面将刷新并自动拉取数据
+              </p>
+            )}
+          </div>
+        )}
 
         {/* 操作按钮 */}
         <div className="settings-actions">
