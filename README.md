@@ -1,32 +1,28 @@
-# React + TypeScript + Vite
+# 🕳️ 异世界 — Stranger Things 主题词汇学习
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+基于 A4 Paper 深渊主题的独立词汇学习体验。
 
-Currently, two official plugins are available:
+## 部署
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+GitHub Pages 自动从 `docs/` 目录部署。
 
-## React Compiler
+## 结构
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```
+├── README.md
+└── docs/                          ← GitHub Pages 部署目录
+    ├── index.html                 ← 入口页（洞穴 → 彩灯墙 → 学习）
+    ├── words-data.js              ← 雅思 + 自选词库
+    ├── stranger-things-bg.jpg     ← 背景
+    ├── Gemini_Generated_Image_*.jpg
+    ├── 微信图片_*.jpg ×2
+    └── favicon.svg
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## 功能
+
+- 洞穴 → 彩灯墙场景转换
+- 雅思核心词库 + 自定义词书（手动录入 / AI 补全）
+- 短语积累面板
+- GitHub Gist 云端同步
+- DeepSeek API 驱动的 AI 单词释义补全

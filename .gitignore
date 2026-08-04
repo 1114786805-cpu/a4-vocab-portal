@@ -1,24 +1,3 @@
-node_modules
-# dist replaced by docs
-backend
-/data
-_debug
 *.log
 .DS_Store
-
-# Temp & backup files
-portal-bg-interactive.backup-*
-portal-bg-interactive.html.bak
-portal-bg-interactive.v*.html
-_append_css.css
-gh_pages_check.html
-book-shelf.html
-words-data.js
-*.jpg
-*.png
-Gemini_Generated_Image_*
-backend__*.py
-__*
-
-.github/workflows/
-!docs
+Thumbs.db
