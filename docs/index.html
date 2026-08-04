@@ -2103,6 +2103,7 @@ document.getElementById('homeBtn').addEventListener('click', () => {
 function rowClickEffect(row, url) {
   row.style.transition = 'transform 0.15s';
   row.style.transform = 'scale(1.2)';
+  playUIPop();
   setTimeout(() => {
     row.style.transform = 'scale(1)';
     window.location.href = url;
@@ -2210,6 +2211,224 @@ function updateDrone() {
   else chromatic *= 0.92;
   applyChromatic();
   requestAnimationFrame(updateDrone);
+}
+
+// ===== 同步音频效果库 =====
+function safeSound(fn) { if (!audioStarted || !audioCtx) return; try { fn(); } catch(e) {} }
+
+// 传送门激活：次低频冲击 + 粒子爆裂 + 上升呼啸
+function playPortalActivation() {
+  safeSound(() => {
+    const t = audioCtx.currentTime;
+    // 次低频冲击
+    const sub = audioCtx.createOscillator();
+    sub.type = 'sine'; sub.frequency.setValueAtTime(35, t);
+    sub.frequency.exponentialRampToValueAtTime(10, t + 1.0);
+    const sG = audioCtx.createGain();
+    sG.gain.setValueAtTime(0.22, t);
+    sG.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
+    sub.connect(sG); sG.connect(audioCtx.destination);
+    sub.start(t); sub.stop(t + 1.0);
+    // 粒子爆裂噪音
+    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.4, audioCtx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++)
+      d[i] = (Math.random() * 2 - 1) * Math.exp(-i / audioCtx.sampleRate * 10) * 0.35;
+    const crk = audioCtx.createBufferSource(); crk.buffer = buf;
+    const cG = audioCtx.createGain();
+    cG.gain.setValueAtTime(0.13, t);
+    cG.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+    const cF = audioCtx.createBiquadFilter();
+    cF.type = 'bandpass'; cF.frequency.value = 700; cF.Q.value = 0.5;
+    crk.connect(cG); cG.connect(cF); cF.connect(audioCtx.destination);
+    crk.start(t);
+    // 上升呼啸
+    const wh = audioCtx.createOscillator();
+    wh.type = 'sawtooth';
+    wh.frequency.setValueAtTime(100, t);
+    wh.frequency.exponentialRampToValueAtTime(500, t + 0.5);
+    const wG = audioCtx.createGain();
+    wG.gain.setValueAtTime(0, t);
+    wG.gain.linearRampToValueAtTime(0.035, t + 0.12);
+    wG.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    const wF = audioCtx.createBiquadFilter();
+    wF.type = 'highpass'; wF.frequency.value = 250;
+    wh.connect(wG); wG.connect(wF); wF.connect(audioCtx.destination);
+    wh.start(t); wh.stop(t + 0.6);
+    // 畸变脉冲
+    const pl = audioCtx.createOscillator();
+    pl.type = 'triangle';
+    pl.frequency.setValueAtTime(180, t);
+    pl.frequency.exponentialRampToValueAtTime(35, t + 0.4);
+    const pG = audioCtx.createGain();
+    pG.gain.setValueAtTime(0.05, t);
+    pG.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+    pl.connect(pG); pG.connect(audioCtx.destination);
+    pl.start(t); pl.stop(t + 0.4);
+  });
+}
+
+// 洞穴穿越音频：渐强嗡鸣扫频
+function playCaveSweep() {
+  safeSound(() => {
+    const t = audioCtx.currentTime;
+    // 低频扫频嗡鸣
+    const sw = audioCtx.createOscillator();
+    sw.type = 'sine';
+    sw.frequency.setValueAtTime(45, t);
+    sw.frequency.linearRampToValueAtTime(90, t + 2.5);
+    const sG = audioCtx.createGain();
+    sG.gain.setValueAtTime(0.01, t);
+    sG.gain.linearRampToValueAtTime(0.04, t + 1.2);
+    sG.gain.linearRampToValueAtTime(0.02, t + 2.5);
+    const sF = audioCtx.createBiquadFilter();
+    sF.type = 'lowpass'; sF.frequency.setValueAtTime(80, t);
+    sF.frequency.linearRampToValueAtTime(250, t + 2.0);
+    sF.Q.value = 1.0;
+    sw.connect(sG); sG.connect(sF); sF.connect(audioCtx.destination);
+    sw.start(t); sw.stop(t + 2.8);
+    // 谐波层
+    const h2 = audioCtx.createOscillator();
+    h2.type = 'sine';
+    h2.frequency.setValueAtTime(67, t);
+    h2.frequency.linearRampToValueAtTime(135, t + 2.5);
+    const hG = audioCtx.createGain();
+    hG.gain.setValueAtTime(0.006, t);
+    hG.gain.linearRampToValueAtTime(0.025, t + 1.5);
+    hG.gain.linearRampToValueAtTime(0.01, t + 2.5);
+    h2.connect(hG); hG.connect(sF);
+    h2.start(t); h2.stop(t + 2.8);
+    // 噪音层（风声）
+    const nBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * 3, audioCtx.sampleRate);
+    const nd = nBuf.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = (Math.random() * 2 - 1) * 0.3;
+    const nSrc = audioCtx.createBufferSource(); nSrc.buffer = nBuf;
+    const nG = audioCtx.createGain();
+    nG.gain.setValueAtTime(0.002, t);
+    nG.gain.linearRampToValueAtTime(0.012, t + 1.2);
+    nG.gain.linearRampToValueAtTime(0.004, t + 2.5);
+    const nF = audioCtx.createBiquadFilter();
+    nF.type = 'bandpass'; nF.frequency.setValueAtTime(200, t);
+    nF.frequency.linearRampToValueAtTime(500, t + 2.0);
+    nF.Q.value = 0.3;
+    nSrc.connect(nG); nG.connect(nF); nF.connect(audioCtx.destination);
+    nSrc.start(t); nSrc.stop(t + 2.8);
+  });
+}
+
+// 揭示音效：暖光绽开
+function playRevealWhoosh() {
+  safeSound(() => {
+    const t = audioCtx.currentTime;
+    // 中频展开
+    const rev = audioCtx.createOscillator();
+    rev.type = 'sine';
+    rev.frequency.setValueAtTime(200, t);
+    rev.frequency.exponentialRampToValueAtTime(800, t + 1.2);
+    const rG = audioCtx.createGain();
+    rG.gain.setValueAtTime(0, t);
+    rG.gain.linearRampToValueAtTime(0.03, t + 0.4);
+    rG.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+    const rF = audioCtx.createBiquadFilter();
+    rF.type = 'lowpass'; rF.frequency.setValueAtTime(300, t);
+    rF.frequency.exponentialRampToValueAtTime(2000, t + 1.0);
+    rF.Q.value = 0.5;
+    rev.connect(rG); rG.connect(rF); rF.connect(audioCtx.destination);
+    rev.start(t); rev.stop(t + 1.3);
+    // 和声
+    const h = audioCtx.createOscillator();
+    h.type = 'sine';
+    h.frequency.setValueAtTime(300, t);
+    h.frequency.exponentialRampToValueAtTime(1200, t + 1.2);
+    const hG2 = audioCtx.createGain();
+    hG2.gain.setValueAtTime(0, t);
+    hG2.gain.linearRampToValueAtTime(0.018, t + 0.5);
+    hG2.gain.exponentialRampToValueAtTime(0.001, t + 1.0);
+    h.connect(hG2); hG2.connect(rF);
+    h.start(t); h.stop(t + 1.3);
+    // 暖色噪音绽放
+    const wBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * 1.5, audioCtx.sampleRate);
+    const wd = wBuf.getChannelData(0);
+    for (let i = 0; i < wd.length; i++)
+      wd[i] = (Math.random() * 2 - 1) * Math.exp(-i / audioCtx.sampleRate * 3) * 0.2;
+    const wSrc = audioCtx.createBufferSource(); wSrc.buffer = wBuf;
+    const wG2 = audioCtx.createGain();
+    wG2.gain.setValueAtTime(0.04, t);
+    wG2.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+    const wF2 = audioCtx.createBiquadFilter();
+    wF2.type = 'bandpass'; wF2.frequency.value = 600; wF2.Q.value = 0.7;
+    wSrc.connect(wG2); wG2.connect(wF2); wF2.connect(audioCtx.destination);
+    wSrc.start(t);
+  });
+}
+
+// UI交互音效：轻触弹跳
+function playUIPop() {
+  safeSound(() => {
+    const t = audioCtx.currentTime;
+    const o = audioCtx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(800, t);
+    o.frequency.exponentialRampToValueAtTime(400, t + 0.08);
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.04, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(t); o.stop(t + 0.12);
+  });
+}
+
+// 学习正确 — 愉悦短铃
+function playCorrect() {
+  safeSound(() => {
+    const t = audioCtx.currentTime;
+    [523, 659, 784].forEach((f, i) => {
+      const o = audioCtx.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = f;
+      const g = audioCtx.createGain();
+      g.gain.setValueAtTime(0, t + i * 0.1);
+      g.gain.linearRampToValueAtTime(0.06, t + i * 0.1 + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.1 + 0.2);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(t + i * 0.1); o.stop(t + i * 0.1 + 0.25);
+    });
+  });
+}
+
+// 学习错误 — 柔和低嗡
+function playIncorrect() {
+  safeSound(() => {
+    const t = audioCtx.currentTime;
+    const o = audioCtx.createOscillator();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(200, t);
+    o.frequency.linearRampToValueAtTime(120, t + 0.3);
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.06, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(t); o.stop(t + 0.4);
+  });
+}
+
+// 页面翻页音效
+function playPageFlip() {
+  safeSound(() => {
+    const t = audioCtx.currentTime;
+    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.15, audioCtx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++)
+      d[i] = (Math.random() * 2 - 1) * Math.exp(-i / audioCtx.sampleRate * 20) * 0.15;
+    const src = audioCtx.createBufferSource(); src.buffer = buf;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.06, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    const f = audioCtx.createBiquadFilter();
+    f.type = 'highpass'; f.frequency.value = 1000;
+    src.connect(g); g.connect(f); f.connect(audioCtx.destination);
+    src.start(t);
+  });
 }
 
 // 粒子类
@@ -2349,22 +2568,7 @@ PC.addEventListener('click', e => {
 
   if (navigator.vibrate) navigator.vibrate(100);
 
-  if (audioStarted && audioCtx) {
-    try {
-    const clickBuf = audioCtx.createBuffer(1, audioCtx.sampleRate*0.2, audioCtx.sampleRate);
-    const cd = clickBuf.getChannelData(0);
-    for (let i=0;i<cd.length;i++) cd[i] = (Math.random()*2-1) * Math.exp(-i/audioCtx.sampleRate*15) * 0.5;
-    const cn = audioCtx.createBufferSource();
-    cn.buffer = clickBuf;
-    const cg = audioCtx.createGain();
-    cg.gain.value = 0.12;
-    const cf = audioCtx.createBiquadFilter();
-    cf.type = 'highpass';
-    cf.frequency.value = 500;
-    cn.connect(cg); cg.connect(cf); cf.connect(audioCtx.destination);
-    cn.start();
-  } catch(e) {}
-}
+  playPortalActivation();
 
 // 切换提示文字
 const hintEl = document.getElementById('hintText');
@@ -2423,27 +2627,8 @@ setTimeout(() => {
       startCaveDustAnimation(document.getElementById('dustCanvas'));
     }, 700);
 
-    // 同时低频嗡鸣随画面亮起而增强
-    if (audioStarted && droneGain) {
-      try {
-        // 产生一个"洞穴共鸣"音效短脉冲
-        const cavePulse = audioCtx.createOscillator();
-        cavePulse.type = 'sine';
-        cavePulse.frequency.value = 80;
-        const cpGain = audioCtx.createGain();
-        cpGain.gain.setValueAtTime(0, audioCtx.currentTime);
-        cpGain.gain.linearRampToValueAtTime(0.025, audioCtx.currentTime + 1.0);
-        cpGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 2.5);
-        const cpLP = audioCtx.createBiquadFilter();
-        cpLP.type = 'lowpass';
-        cpLP.frequency.value = 150;
-        cavePulse.connect(cpGain);
-        cpGain.connect(cpLP);
-        cpLP.connect(audioCtx.destination);
-        cavePulse.start();
-        cavePulse.stop(audioCtx.currentTime + 2.5);
-      } catch(e) {}
-    }
+    // 同步洞穴穿越音频
+    playCaveSweep();
   }
 
   if (caveImg.complete) {
@@ -2465,6 +2650,7 @@ setTimeout(() => {
       caveEl.style.opacity = '0';
       imgFrame.style.transition = 'opacity 1.0s ease';
       imgFrame.style.opacity = '1';
+      playRevealWhoosh();
 
       // 3) 同步淡出洞穴辅助层
       lightWash.style.transition = 'opacity 0.4s ease';
@@ -2863,6 +3049,7 @@ console.log('🌌 异世界深渊入口已激活');
       bulb.textContent = i;
       bulb.dataset.page = i;
       bulb.addEventListener('click', () => {
+        playUIPop();
         // 清除继续上次按钮
         const rb = document.getElementById('resumeBtn');
         if (rb) rb.remove();
@@ -4126,6 +4313,7 @@ console.log('🌌 异世界深渊入口已激活');
     if (!s.currentWord || s.phase !== 'learn') return;
     s.phase = 'write';
     s.a4WriteTarget = s.currentWord;
+    playPageFlip();
     renderLearnStage();
     saveSession();  // 🦐 进入书写前保存
   }
@@ -4234,6 +4422,7 @@ console.log('🌌 异世界深渊入口已激活');
 
     // 显示判断结果
     learnState._judgmentResult = { correct, word: w, userInput: text, detail };
+    if (correct) playCorrect(); else playIncorrect();
     input.value = '';
     renderLearnStage();
     saveSession();  // 🦐 每一步都记忆
