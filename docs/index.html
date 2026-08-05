@@ -3025,7 +3025,8 @@ console.log('🌌 异世界深渊入口已激活');
   // 需要先加载 words-data.js
   
   const PAGE_SIZE = 25;
-  const TOTAL_PAGES = 120; // IELTS词汇固定120页
+  // TOTAL_PAGES 改为动态计算，基于实际导入的词汇数量
+  // 不再硬编码，随数据增长自动适配
   let currentBookId = 'cambridge-ielts-1';
   let currentPageIdx = 0;
 
@@ -3036,7 +3037,11 @@ console.log('🌌 异世界深渊入口已激活');
     if (currentBookId && currentBookId.startsWith('custom_')) {
       return getCustomBookTotalPages(currentBookId);
     }
-    return TOTAL_PAGES;
+    // IELTS词汇：动态计算总页数
+    if (typeof ieltsCoreWords !== 'undefined' && ieltsCoreWords.length > 0) {
+      return Math.ceil(ieltsCoreWords.length / PAGE_SIZE);
+    }
+    return 0;
   }
 
   function buildPageGrid() {
