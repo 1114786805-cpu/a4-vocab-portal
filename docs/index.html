@@ -4655,15 +4655,15 @@ console.log('🌌 异世界深渊入口已激活');
     if (keywordsMatch && overlapDef >= 0.3) {
       return { correct: true, confidence: 0.85, errorType: null, correctAnswer: word.coreConcept };
     }
-    if (keywordsMatch && userInput.length >= 4) {
+    if (keywordsMatch && userInput.length >= 3) {
       return { correct: true, confidence: 0.70, errorType: null, correctAnswer: word.coreConcept };
     }
-    if (!keywordsMatch && overlapDef < 0.15 && userInput.length >= 4) {
+    if (!keywordsMatch && overlapDef < 0.15 && userInput.length >= 3) {
       return { correct: false, confidence: 0.7, errorType: 'misunderstanding', errorDetail: '输入与正确释义有明显差距', correctAnswer: word.coreConcept };
     }
 
     // 兜底：放宽条件
-    if (userInput.length >= 4 && overlapDef >= 0.15) {
+    if (userInput.length >= 3 && overlapDef >= 0.15) {
       return { correct: true, confidence: 0.55, errorType: null, correctAnswer: word.coreConcept };
     }
     return { correct: false, confidence: 0.5, errorType: 'misunderstanding', errorDetail: '未能准确理解语义', correctAnswer: word.coreConcept };
@@ -4690,11 +4690,11 @@ console.log('🌌 异世界深渊入口已激活');
 
   function extractKeywordsNative(text) {
     const stopWords = new Set(['的','了','是','在','和','与','有','为','对','被','把','让','从','到','以','之','这','那','上','下','要','会','能','可','还','也','就','都','而','且','如果','因为','所以','虽然','但是','以及','或者','并']);
-    return text.replace(/[，。！？、；：""''（）【】《》\s,\.!?\?;:\(\)\[\]<>]/g,' ').split(/\s+/).filter(t => t.length >= 2 && !stopWords.has(t));
+    return text.replace(/[，。！？、；：""''（）【】《》\s,\.!?\?;:\(\)\[\]<>\/]/g,' ').split(/\s+/).filter(t => t.length >= 2 && !stopWords.has(t));
   }
 
   function tokenizeNative(text) {
-    const cleaned = text.replace(/[，。！？、；：""''（）【】《》\s,\.!?\?;:\(\)\[\]<>]/g,' ').toLowerCase();
+    const cleaned = text.replace(/[，。！？、；：""''（）【】《》\s,\.!?\?;:\(\)\[\]<>\/]/g,' ').toLowerCase();
     return cleaned.split(/\s+/).filter(t => t.length >= 2);
   }
 
