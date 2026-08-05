@@ -3251,19 +3251,19 @@ console.log('🌌 异世界深渊入口已激活');
 
   function getApiProxyUrl() {
     // 优先本地代理（localhost 在 HTTPS 页面下不会被浏览器拦截）
-    if (typeof window !== 'undefined' && window._apiProxyUrl) return window._apiProxyUrl;
+    if (window._apiProxyUrl) return window._apiProxyUrl;
     const PROXY_CANDIDATES = [
       'http://localhost:13002/api/deepseek',       // 本地代理（推荐🔥）
       'https://corsproxy.io/?' + encodeURIComponent(AI_API_URL), // 公共代理（备选）
     ];
-    // 首次检测本地代理可用性（session内缓存）
+    // 默认用本地代理；异步检测完成后若不可用再切换（下次调用生效）
     if (!window._apiProxyChecked) {
       window._apiProxyChecked = true;
+      window._apiProxyUrl = PROXY_CANDIDATES[0];
       fetch(PROXY_CANDIDATES[0], { method: 'OPTIONS', signal: AbortSignal.timeout(2000) })
-        .then(r => { if (r.ok) window._apiProxyUrl = PROXY_CANDIDATES[0]; })
         .catch(() => { window._apiProxyUrl = PROXY_CANDIDATES[1]; });
     }
-    return window._apiProxyUrl || PROXY_CANDIDATES[1];
+    return window._apiProxyUrl || PROXY_CANDIDATES[0];
   }
 
   // 导入模式: 'custom_book' (录入词书) | 'reading_article' (阅读词汇→录入阅读篇目)
