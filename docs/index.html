@@ -4128,6 +4128,8 @@ console.log('🌌 异世界深渊入口已激活');
         <button class="learn-btn" onclick="handleFinishLearning()">已掌握 →</button>
       </div>
     `;
+    // 🦐 自动播放单词发音
+    setTimeout(() => speakWord(w.word), 200);
   }
 
   // 拼写阶段 (write) — 工作区只显示词信息，输入框在 A4 纸上
@@ -4150,6 +4152,8 @@ console.log('🌌 异世界深渊入口已激活');
         </div>
       </div>
     `;
+    // 🦐 书写阶段也播放发音，帮助拼写
+    setTimeout(() => speakWord(w.word), 250);
   }
 
   // 回忆输入
@@ -4188,6 +4192,10 @@ console.log('🌌 异世界深渊入口已激活');
       const inp = document.getElementById('recallInput');
       if (inp) inp.focus();
     }, 100);
+    // 🦐 复习模式自动播放单词发音
+    if (mode !== 'single') {
+      setTimeout(() => speakWord(w.word), 300);
+    }
   }
 
   // 判断结果渲染
@@ -4613,6 +4621,8 @@ console.log('🌌 异世界深渊入口已激活');
   // ============== 发音 ==============
   function speakWord(text) {
     if ('speechSynthesis' in window) {
+      // 取消之前未完成的发音，避免队列堆积
+      speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'en-US';
       u.rate = 0.85;
