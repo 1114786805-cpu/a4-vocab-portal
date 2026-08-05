@@ -4494,8 +4494,8 @@ console.log('🌌 异世界深渊入口已激活');
     let aiExplanation = '';
     let aiConfusion = null;
 
-    // AI 后备判断：本地判错时调 AI 做语义级判断
-    if (!correct && text.length >= 3) {
+    // AI 始终做最终判断（localJudge 先用，AI 覆写；无 API key 时仅用 localJudge）
+    if (text.length >= 3) {
       const apiKey = getApiKey();
       if (apiKey) {
         // 显示 AI 加载状态
