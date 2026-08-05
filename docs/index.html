@@ -3077,6 +3077,11 @@ console.log('🌌 异世界深渊入口已激活');
 
   // 灯带面板显示/隐藏
   function showPageSelector(source) {
+    // 🦐 切换词书时重置 currentBookId，防止状态污染
+    if (source === 'ielts' || !source) {
+      currentBookId = 'cambridge-ielts-1';
+    }
+    
     document.getElementById('revealedOverlay').classList.remove('showing');
     document.getElementById('pageSelector').classList.add('showing');
     buildPageGrid();
