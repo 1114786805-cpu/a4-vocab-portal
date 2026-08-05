@@ -4663,8 +4663,12 @@ console.log('🌌 异世界深渊入口已激活');
     }
 
     // 兜底：放宽条件
-    if (userInput.length >= 3 && overlapDef >= 0.15) {
+    if (userInput.length >= 3 && overlapDef >= 0.20) {
       return { correct: true, confidence: 0.55, errorType: null, correctAnswer: word.coreConcept };
+    }
+    // 2字短输入但高重叠（如"很快"↔"快速的"）
+    if (userInput.length >= 2 && overlapDef >= 0.50) {
+      return { correct: true, confidence: 0.50, errorType: null, correctAnswer: word.coreConcept };
     }
     return { correct: false, confidence: 0.5, errorType: 'misunderstanding', errorDetail: '未能准确理解语义', correctAnswer: word.coreConcept };
   }
@@ -4683,7 +4687,7 @@ console.log('🌌 异世界深渊入口已激活');
     let matchCount = 0;
     for (const kw of allKw) {
       if ([...inputSet].some(t => t.includes(kw) || kw.includes(t))) matchCount++;
-      if (userInput.includes(kw) || kw.includes(userInput.replace(/\s/g,''))) matchCount++;
+      else if (userInput.includes(kw) || kw.includes(userInput.replace(/\s/g,''))) matchCount++;
     }
     return matchCount >= Math.min(2, allKw.length);
   }
@@ -4699,7 +4703,10 @@ console.log('🌌 异世界深渊入口已激活');
   }
 
   function charOverlapNative(a, b) {
-    const setA = new Set(a), setB = new Set(b);
+    // 去除高频停用字避免误判（如"的"让"建设的"和"破坏的"共享33%重叠）
+    const STOP_CHARS = new Set(['的','了','是','在','和','与','有','为','对','被','把','让','从','到','以','之','这','那','上','下','要','会','能','可','还','也','就','都','而','且']);
+    const setA = new Set([...a].filter(c => !STOP_CHARS.has(c)));
+    const setB = new Set([...b].filter(c => !STOP_CHARS.has(c)));
     if (setA.size === 0 || setB.size === 0) return 0;
     let intersection = 0;
     for (const ch of setA) { if (setB.has(ch)) intersection++; }
