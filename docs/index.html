@@ -1317,6 +1317,72 @@ canvas {
   margin-bottom: 20px;
   line-height: 1.5;
 }
+.judgment-result .result-icon.thinking {
+  color: rgba(255,180,100,0.8);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.judgment-result .ai-badge {
+  display: inline-block;
+  font-size: 12px;
+  color: rgba(255,180,100,0.9);
+  background: rgba(255,180,100,0.12);
+  border: 1px solid rgba(255,180,100,0.25);
+  border-radius: 8px;
+  padding: 4px 12px;
+  margin: 8px 0 4px;
+}
+.judgment-result .ai-explanation {
+  font-size: 13px;
+  color: rgba(255,200,150,0.6);
+  margin: 6px 0 14px;
+  line-height: 1.5;
+  font-style: italic;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+/* 混淆检测卡片 */
+.confusion-card {
+  margin: 12px auto;
+  padding: 12px 16px;
+  background: rgba(255,100,80,0.08);
+  border: 1px solid rgba(255,100,80,0.2);
+  border-radius: 10px;
+  max-width: 320px;
+}
+.confusion-title {
+  font-size: 13px;
+  color: rgba(255,120,100,0.85);
+  margin-bottom: 8px;
+}
+.confusion-pair {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 18px;
+}
+.confusion-word {
+  padding: 4px 14px;
+  border-radius: 6px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.confusion-word.bad {
+  color: #e74c3c;
+  background: rgba(231,76,60,0.1);
+  text-decoration: line-through;
+  text-decoration-color: rgba(231,76,60,0.3);
+}
+.confusion-word.good {
+  color: #6fcf97;
+  background: rgba(111,207,151,0.1);
+}
+.confusion-arrow {
+  color: rgba(255,180,100,0.5);
+  font-size: 16px;
+}
 
 /* 完成页 */
 .page-done-view {
@@ -4213,14 +4279,39 @@ console.log('🌌 异世界深渊入口已激活');
     const jr = s._judgmentResult;
     const w = jr.word;
     if (!w) { area.innerHTML = ''; return; }
-    const isCorrect = jr.correct;
 
+    // AI 判断加载中
+    if (jr.aiLoading) {
+      area.innerHTML = `
+        <div class="judgment-result">
+          <div class="result-icon thinking">🤔</div>
+          <div class="result-text">AI 语义判断中...</div>
+          <div class="word-text" style="font-size:24px;margin:12px 0;opacity:0.6;">${w.word}</div>
+          <div class="result-detail">你输入的"${jr.userInput}"与词书释义有差异，正在调用 AI 判断...</div>
+        </div>
+      `;
+      return;
+    }
+
+    const isCorrect = jr.correct;
     area.innerHTML = `
       <div class="judgment-result">
         <div class="result-icon ${isCorrect ? 'correct' : 'wrong'}">${isCorrect ? '✓' : '✗'}</div>
-        <div class="result-text">${isCorrect ? '正确！' : '需要再看看'}</div>
+        <div class="result-text">${isCorrect ? (jr.aiJudged ? 'AI 判断：正确！' : '正确！') : (jr.aiJudged ? 'AI 判断：不正确' : '需要再看看')}</div>
         <div class="word-text" style="font-size:28px;margin:12px 0;">${w.word}</div>
-        ${jr.detail ? `<div class="result-detail">${jr.detail}</div>` : ''}
+        ${jr.aiJudged ? `<div class="ai-badge">🤖 AI 语义判断</div>` : ''}
+        ${jr.aiExplanation ? `<div class="ai-explanation">💬 ${jr.aiExplanation}</div>` : ''}
+        ${jr.aiConfusion && Array.isArray(jr.aiConfusion) && jr.aiConfusion.length >= 2 ? `
+          <div class="confusion-card">
+            <div class="confusion-title">⚠️ 你可能混淆了两个单词</div>
+            <div class="confusion-pair">
+              <span class="confusion-word bad">${jr.aiConfusion[0]}</span>
+              <span class="confusion-arrow">↔</span>
+              <span class="confusion-word good">${jr.aiConfusion[1]}</span>
+            </div>
+          </div>
+        ` : ''}
+        ${jr.detail && !jr.aiJudged ? `<div class="result-detail">${jr.detail}</div>` : ''}
         <div class="correct-answer">${w.definition}</div>
         ${w.coreConcept ? `<div class="correct-def">核心概念：${w.coreConcept}</div>` : ''}
         <button class="learn-btn" onclick="handleContinueAfterJudgment()">继续 →</button>
@@ -4397,10 +4488,39 @@ console.log('🌌 异世界深渊入口已激活');
 
     // 本地judge
     const judgment = localJudge(w, text);
-    const correct = judgment.correct;
-    const detail = judgment.errorDetail || '';
+    let correct = judgment.correct;
+    let detail = judgment.errorDetail || '';
+    let aiJudged = false;
+    let aiExplanation = '';
+    let aiConfusion = null;
 
-    // 记录历史
+    // AI 后备判断：本地判错时调 AI 做语义级判断
+    if (!correct && text.length >= 3) {
+      const apiKey = getApiKey();
+      if (apiKey) {
+        // 显示 AI 加载状态
+        learnState._judgmentResult = { correct: null, word: w, userInput: text, detail: '', aiLoading: true };
+        if (input) input.disabled = true;
+        input.value = '';
+        renderLearnStage();
+
+        try {
+          const aiResult = await judgeWithAI(w, text, apiKey);
+          if (aiResult !== null) {
+            correct = aiResult.correct;
+            aiJudged = true;
+            aiExplanation = aiResult.explanation || '';
+            aiConfusion = aiResult.confusion || null;
+            detail = correct ? '' : (aiResult.explanation || detail);
+          }
+        } catch(e) {
+          // AI 判断失败，保持本地判断结果
+        }
+        if (input) input.disabled = false;
+      }
+    }
+
+    // 记录历史（使用最终判断结果）
     const s2 = learnState;
     s2.history.push({
       wordId: w.id,
@@ -4439,7 +4559,7 @@ console.log('🌌 异世界深渊入口已激活');
     }
 
     // 显示判断结果
-    learnState._judgmentResult = { correct, word: w, userInput: text, detail };
+    learnState._judgmentResult = { correct, word: w, userInput: text, detail, aiJudged, aiExplanation, aiConfusion };
     if (correct) playCorrect(); else playIncorrect();
     input.value = '';
     renderLearnStage();
@@ -4711,6 +4831,77 @@ console.log('🌌 异世界深渊入口已激活');
     let intersection = 0;
     for (const ch of setA) { if (setB.has(ch)) intersection++; }
     return intersection / Math.min(setA.size, setB.size);
+  }
+
+  // ============== AI 语义判断后备 ==============
+  function getApiKey() {
+    try { return localStorage.getItem('wordsense_api_key') || ''; } catch(e) { return ''; }
+  }
+
+  async function judgeWithAI(word, userInput, apiKey) {
+    const prompt = `你是中英双语词汇教学评估专家。请判断学生对英文单词的中文释义回答是否正确。
+
+英文单词: "${word.word}"
+词书标准释义: "${word.definition || ''}"
+核心概念: "${word.coreConcept || ''}"
+学生回答: "${userInput}"
+
+任务1：语义判断
+- 只要学生的中文回答在语义上与标准释义表达的是同一概念/意思，即判定为正确
+- 措辞不同、用词不同不算错误——例："具有损害的"="破坏性的"、"有毒害的"="有害的"、"加快"="加速"
+- 只有语义完全错误才算错，放宽尺度，略有相关性即判对
+
+任务2：混淆检测（仅在答案不正确时做）
+- 如果学生的回答与标准释义不符，判断学生是否把该单词与另一个拼写/发音/词根相似的英文单词搞混了
+- 常见混淆对示例：
+  * destructive ↔ constructive（破坏的 ↔ 建设的）
+  * affect ↔ effect（影响 ↔ 效果/结果）
+  * compliment ↔ complement（赞美 ↔ 补充）
+  * principal ↔ principle（校长/本金 ↔ 原则）
+  * emigrate ↔ immigrate（移出 ↔ 移入）
+  * precede ↔ proceed（先于 ↔ 继续）
+- 如果存在混淆，confusion字段列出师生正在学的那对混淆词；如果仅是记错而非混淆，confusion为null
+
+请严格按JSON格式回复，不要有任何其他文字：
+{
+  "correct": true,
+  "explanation": "简短的判断理由（一句话，中文）",
+  "confusion": null
+}`;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    try {
+      const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.1,
+          max_tokens: 300,
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+
+      if (!resp.ok) return null;
+
+      const data = await resp.json();
+      const content = data.choices?.[0]?.message?.content || '';
+      const m = content.match(/\{[\s\S]*\}/);
+      if (!m) return null;
+
+      return JSON.parse(m[0]);
+    } catch(e) {
+      clearTimeout(timeout);
+      return null;
+    }
   }
 
   // ============== 开始学习某页 ==============
