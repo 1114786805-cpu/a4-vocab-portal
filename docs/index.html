@@ -3605,7 +3605,7 @@ console.log('🌌 异世界深渊入口已激活');
     const prompt = '你是英语单词教学专家。请为单词 "' + word + '" 生成完整的单词教学卡片内容。\n\n要求：\n1. **音标**: 英式音标，用 // 包裹\n2. **词性**: 如 v., n., adj., adv., prep. 等，必要时用 / 表示多词性\n3. **中文释义**: 核心释义，1-2个关键义项\n4. **核心概念**: 用4-8个字概括这个词最本质的用法/场景\n5. **例句**: 2个地道英语例句，带中文翻译，用 JSON 数组\n6. **搭配**: 2-3个常见搭配用法\n\n请严格按 JSON 格式回复，不要包含其他内容：\n{\n  "word": "' + word + '",\n  "phonetic": "/.../",\n  "pos": "v.",\n  "definition": "中文释义",\n  "coreConcept": "核心概念几个字",\n  "examples": ["例1", "例2"],\n  "collocations": ["搭配1", "搭配2"]\n}';
 
     try {
-      const resp = await fetch(AI_API_URL, {
+      const resp = await fetch('https://corsproxy.io/?' + encodeURIComponent('https://api.deepseek.com/v1/chat/completions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
         body: JSON.stringify({
@@ -3965,7 +3965,7 @@ console.log('🌌 异世界深渊入口已激活');
   "notes": "实用备注一句话"
 }`;
 
-      const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      const resp = await fetch('https://corsproxy.io/?' + encodeURIComponent('https://api.deepseek.com/v1/chat/completions'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -4873,7 +4873,7 @@ console.log('🌌 异世界深渊入口已激活');
     const timeout = setTimeout(() => controller.abort(), 8000);
 
     try {
-      const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      const resp = await fetch('https://corsproxy.io/?' + encodeURIComponent('https://api.deepseek.com/v1/chat/completions'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
