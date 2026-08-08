@@ -2428,6 +2428,21 @@ function initAudio() {
   if (audioStarted) return;
   try {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // 🦐 移动端/某些浏览器 AudioContext 初始 state 为 suspended，需 resume
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(() => {});
+    }
+    // 全局用户交互后自动恢复（iOS Safari 常见）
+    if (!window._audioResumeBound) {
+      window._audioResumeBound = true;
+      ['click','touchstart','keydown'].forEach(evt => {
+        document.addEventListener(evt, () => {
+          if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume().catch(() => {});
+          }
+        }, { once: false, passive: true });
+      });
+    }
 
     droneOsc = audioCtx.createOscillator();
     droneOsc.type = 'sawtooth';
@@ -5004,15 +5019,110 @@ console.log('🌌 异世界深渊入口已激活');
   }
 
   // ============== 发音 ==============
-  function speakWord(text) {
-    if ('speechSynthesis' in window) {
-      // 取消之前未完成的发音，避免队列堆积
-      speechSynthesis.cancel();
+  // 🦐 语音引擎状态：预加载美式语音 + Chrome cancel() 竞态修复 + 错误重试
+  // 🦐 全局首次交互时预热语音引擎（iOS Safari 必须在用户手势中触发）
+  if (!window._speakBootstrapped) {
+    window._speakBootstrapped = true;
+    const _bootstrapSpeak = () => {
+      if ('speechSynthesis' in window) {
+        speechSynthesis.getVoices(); // 触发 voiceschanged 事件
+        const dummy = new SpeechSynthesisUtterance('');
+        dummy.volume = 0;
+        dummy.rate = 2;
+        speechSynthesis.speak(dummy);
+        speechSynthesis.cancel();
+      }
+    };
+    ['click','touchstart','keydown'].forEach(evt => {
+      document.addEventListener(evt, _bootstrapSpeak, { once: true, passive: true });
+    });
+  }
+  let _speakVoicesReady = false;
+  let _speakVoicesPromise = null;
+
+  function _ensureVoices() {
+    if (_speakVoicesReady) return Promise.resolve();
+    if (!('speechSynthesis' in window)) return Promise.resolve();
+    if (_speakVoicesPromise) return _speakVoicesPromise;
+
+    const voices = speechSynthesis.getVoices();
+    if (voices.length > 0) { _speakVoicesReady = true; return Promise.resolve(); }
+
+    _speakVoicesPromise = new Promise(resolve => {
+      const handler = () => {
+        speechSynthesis.removeEventListener('voiceschanged', handler);
+        _speakVoicesReady = true;
+        _speakVoicesPromise = null;
+        resolve();
+      };
+      speechSynthesis.addEventListener('voiceschanged', handler);
+      // 1.5s 兜底超时，防止 never-resolve
+      setTimeout(() => {
+        speechSynthesis.removeEventListener('voiceschanged', handler);
+        _speakVoicesReady = true;
+        _speakVoicesPromise = null;
+        resolve();
+      }, 1500);
+    });
+    return _speakVoicesPromise;
+  }
+
+  function _getUSVoice() {
+    const voices = speechSynthesis.getVoices();
+    return (
+      voices.find(v => v.lang === 'en-US' && v.name.includes('Google')) ||
+      voices.find(v => v.lang === 'en-US' && v.name.includes('Samantha')) ||
+      voices.find(v => v.lang === 'en-US') ||
+      voices.find(v => v.lang.startsWith('en')) ||
+      null
+    );
+  }
+
+  let _speakRetryCount = 0;
+  const MAX_SPEAK_RETRIES = 3;
+
+  async function speakWord(text) {
+    if (!('speechSynthesis' in window)) return;
+    if (!text || !text.trim()) return;
+
+    await _ensureVoices();
+
+    // Chrome/Edge bug 修复：cancel 后延迟再 speak，避免竞态
+    speechSynthesis.cancel();
+    await new Promise(r => setTimeout(r, 60));
+
+    const utter = (retry) => {
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'en-US';
       u.rate = 0.85;
+      u.pitch = 1.0;
+      u.volume = 1.0;
+
+      const voice = _getUSVoice();
+      if (voice) u.voice = voice;
+
+      const cleanup = () => {
+        _speakRetryCount = 0;
+      };
+
+      u.onend = cleanup;
+      u.onerror = (e) => {
+        // 'canceled' 是本函数自己的 cancel() 触发的，不算错误
+        if (e.error === 'canceled' || e.error === 'interrupted') { cleanup(); return; }
+        console.warn('🦐 speakWord error:', e.error, 'retry:', retry);
+        if (retry < MAX_SPEAK_RETRIES) {
+          _speakRetryCount = retry + 1;
+          setTimeout(() => utter(retry + 1), 150 * (retry + 1));
+        } else {
+          cleanup();
+          console.warn('🦐 speakWord 重试耗尽:', text);
+        }
+      };
+
       speechSynthesis.speak(u);
-    }
+    };
+
+    utter(0);
   }
 
   // ============== 本地judge移植 ==============
