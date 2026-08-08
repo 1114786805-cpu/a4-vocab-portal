@@ -5068,11 +5068,59 @@ console.log('🌌 异世界深渊入口已激活');
     return { _meta: { version: 2, lastUpdatedAt: new Date().toISOString(), deviceId: devId }, data: d };
   }
 
+  // 判断 key 是否为数组型（按 id 合并）
+  function _isArrayKey(k) {
+    return k === 'a4paper_reading_banks' || k === 'a4paper_custom_books' ||
+           k === 'a4paper_scanned_books' || k === 'a4paper_phrases' ||
+           k === 'a4paper_learning_history' || k === 'a4paper_error_words';
+  }
+
+  // 智能合并远程数据（不再全量覆盖）
   function unpackRemoteData(payload) {
     var keys = [];
     for (var k in payload.data) {
       if (!payload.data.hasOwnProperty(k) || k === GIST_CONFIG_KEY) continue;
-      try { localStorage.setItem(k, JSON.stringify(payload.data[k])); keys.push(k); } catch(e) {}
+      try {
+        var remoteVal = payload.data[k];
+        var rawLocal = localStorage.getItem(k);
+
+        if (_isArrayKey(k)) {
+          // 数组型：按 id 合并，保留本地新增 + 远程新增，不丢失任何一方
+          var localArr = [];
+          if (rawLocal) { try { localArr = JSON.parse(rawLocal); } catch(e) {} }
+          if (!Array.isArray(localArr)) localArr = [];
+          var remoteArr = Array.isArray(remoteVal) ? remoteVal : [];
+          // 用 Map 按 id 去重合并：本地优先（id 相同的保留本地版本），远程只补充本地没有的
+          var merged = {};
+          for (var li = 0; li < localArr.length; li++) {
+            var item = localArr[li];
+            if (item && typeof item.id !== 'undefined') merged[item.id] = item;
+          }
+          for (var ri = 0; ri < remoteArr.length; ri++) {
+            var rItem = remoteArr[ri];
+            if (rItem && typeof rItem.id !== 'undefined' && !(rItem.id in merged)) {
+              merged[rItem.id] = rItem;
+            }
+          }
+          localStorage.setItem(k, JSON.stringify(Object.values(merged)));
+        } else if (typeof remoteVal === 'object' && remoteVal !== null && !Array.isArray(remoteVal)) {
+          // 对象型：合并 key，本地优先
+          var localObj = {};
+          if (rawLocal) { try { localObj = JSON.parse(rawLocal); } catch(e) {} }
+          if (typeof localObj !== 'object' || localObj === null || Array.isArray(localObj)) localObj = {};
+          var mergedObj = {};
+          for (var rk in remoteVal) { if (remoteVal.hasOwnProperty(rk)) mergedObj[rk] = remoteVal[rk]; }
+          for (var lk in localObj) { if (localObj.hasOwnProperty(lk)) mergedObj[lk] = localObj[lk]; }
+          localStorage.setItem(k, JSON.stringify(mergedObj));
+        } else {
+          // 基本类型/字符串：本地优先，只在没有本地值时用远程
+          if (rawLocal === null || rawLocal === 'null' || rawLocal === '""' || rawLocal === '[]') {
+            localStorage.setItem(k, JSON.stringify(remoteVal));
+          }
+          // 如果本地有值，保持本地不动
+        }
+        keys.push(k);
+      } catch(e) { console.log('🦐 合并键 ' + k + ' 失败: ' + e.message); }
     }
     return { keys: keys, timestamp: payload._meta.lastUpdatedAt, deviceId: payload._meta.deviceId };
   }
@@ -5177,10 +5225,27 @@ console.log('🌌 异世界深渊入口已激活');
 
       var remoteTime = new Date(remote._meta.lastUpdatedAt).getTime();
       var localTime = cfg.lastSyncedAt ? new Date(cfg.lastSyncedAt).getTime() : 0;
-      if (remoteTime > localTime && remote._meta.deviceId !== devId) {
-        var r3 = unpackRemoteData(remote);
+
+      // 关键修复：lastSyncedAt 为空 → 设备从未同步过 → 不确定谁更新
+      // 先推本地到云端（保数据不丢），再拉远程做智能合并
+      if (!cfg.lastSyncedAt) {
+        console.log('🦐 首次同步: 先推送本地数据到云端');
+        await updateGist(cfg.gistId, token, packLocalData(devId));
         saveGistConfig(cfg.gistId, new Date().toISOString(), devId);
-        return { pulled: true, pushed: false, keys: r3.keys, message: '已同步云端最新数据 (' + r3.keys.length + ' 项)' };
+        // 重新读取云端（现在包含了刚推送的本地数据）
+        var freshRemote = await readGistData(cfg.gistId, token);
+        if (freshRemote) {
+          var r3 = unpackRemoteData(freshRemote);
+          return { pulled: true, pushed: true, keys: r3.keys, message: '已合并同步 (' + r3.keys.length + ' 项)' };
+        }
+        var r3 = unpackRemoteData(remote);
+        return { pulled: true, pushed: true, keys: r3.keys, message: '已合并同步 (' + r3.keys.length + ' 项)' };
+      }
+
+      if (remoteTime > localTime && remote._meta.deviceId !== devId) {
+        var r4 = unpackRemoteData(remote);
+        saveGistConfig(cfg.gistId, new Date().toISOString(), devId);
+        return { pulled: true, pushed: false, keys: r4.keys, message: '已同步云端最新数据 (' + r4.keys.length + ' 项)' };
       }
 
       return { pulled: false, pushed: false, message: '数据已是最新' };
@@ -5205,13 +5270,24 @@ console.log('🌌 异世界深渊入口已激活');
       if (!remote) return { pulled: false, message: '远程数据为空，请检查网络或输入 Token' };
 
       var localEmpty = isLocalEmpty();
+
+      // 本地为空 → 无条件从远程恢复
+      if (localEmpty) {
+        console.log('🦐 匿名同步: 本地为空，从远程恢复');
+        var rLocalEmpty = unpackRemoteData(remote);
+        saveGistConfig(config.gistId, new Date().toISOString(), devId);
+        return { pulled: true, keys: rLocalEmpty.keys, message: '已从云端恢复 ' + rLocalEmpty.keys.length + ' 项数据' };
+      }
+
       var remoteTime = new Date(remote._meta.lastUpdatedAt).getTime();
       var localTime = config.lastSyncedAt ? new Date(config.lastSyncedAt).getTime() : 0;
 
-      if (localEmpty) {
+      // 设备从未同步过 → 不确定谁更新，智能合并（unpackRemoteData 会保留本地数据）
+      if (!config.lastSyncedAt) {
+        console.log('🦐 匿名首次同步: 智能合并');
         var r1 = unpackRemoteData(remote);
         saveGistConfig(config.gistId, new Date().toISOString(), devId);
-        return { pulled: true, keys: r1.keys, message: '已从云端恢复 ' + r1.keys.length + ' 项数据' };
+        return { pulled: true, keys: r1.keys, message: '已合并同步 (' + r1.keys.length + ' 项)' };
       }
 
       if (remoteTime > localTime && remote._meta.deviceId !== devId) {
