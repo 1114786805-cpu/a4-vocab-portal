@@ -1649,6 +1649,209 @@ canvas {
   border-radius: 3px;
 }
 
+/* ======= 🦐 整页A4复习模式 ======= */
+.a4-full-review-section {
+  position: relative;
+  z-index: 2;
+}
+.a4-slot.review {
+  cursor: pointer;
+  border: 1px solid rgba(0,0,0,0.05);
+  background: rgba(0,0,0,0.015);
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.a4-slot.review:hover {
+  background: rgba(255, 190, 60, 0.12);
+  border-color: rgba(255, 180, 40, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+}
+.a4-slot.review .a4-slot-text {
+  letter-spacing: 0.5px;
+  transition: color 0.2s;
+}
+.a4-slot.review:hover .a4-slot-text {
+  color: #c0392b;
+}
+.a4-review-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  position: relative;
+  z-index: 2;
+}
+.a4-review-title {
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-size: 15px;
+  color: #666;
+  letter-spacing: 4px;
+}
+.a4-review-page-num {
+  font-family: 'Georgia', serif;
+  font-size: 13px;
+  color: #aaa;
+  letter-spacing: 2px;
+}
+.a4-review-exit {
+  cursor: pointer;
+  font-size: 13px;
+  font-family: 'Georgia', serif;
+  letter-spacing: 2px;
+  color: #999;
+  border: 1px solid rgba(0,0,0,0.1);
+  border-radius: 3px;
+  padding: 4px 16px;
+  transition: all 0.2s;
+  background: transparent;
+}
+.a4-review-exit:hover {
+  color: #c0392b;
+  border-color: rgba(192,57,43,0.3);
+  background: rgba(192,57,43,0.04);
+}
+.a4-review-progress {
+  font-family: 'Georgia', serif;
+  font-size: 11px;
+  color: #aaa;
+  letter-spacing: 1px;
+}
+/* 点击弹出词卡 */
+.a4-word-popup {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: popupIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.a4-word-popup-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(5,3,1,0.6);
+  backdrop-filter: blur(4px);
+}
+.a4-word-popup-card {
+  position: relative;
+  z-index: 1;
+  background: rgba(250,247,242,0.97);
+  border-radius: 6px;
+  padding: 32px 40px;
+  min-width: 340px;
+  max-width: 480px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.25);
+  font-family: 'Georgia', 'Times New Roman', serif;
+  animation: cardSlideUp 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes popupIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes cardSlideUp {
+  from { opacity: 0; transform: translateY(30px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.a4-word-popup-word {
+  font-size: 32px;
+  color: #222;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.a4-word-popup-speak {
+  cursor: pointer;
+  font-size: 20px;
+  opacity: 0.5;
+  transition: opacity 0.2s, transform 0.2s;
+  display: inline-flex;
+}
+.a4-word-popup-speak:hover {
+  opacity: 1;
+  transform: scale(1.2);
+}
+.a4-word-popup-phonetic {
+  font-size: 14px;
+  color: #888;
+  margin-bottom: 4px;
+}
+.a4-word-popup-pos {
+  font-size: 12px;
+  color: #aaa;
+  letter-spacing: 2px;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+}
+.a4-word-popup-def {
+  font-size: 16px;
+  color: #333;
+  line-height: 1.7;
+  margin-bottom: 8px;
+}
+.a4-word-popup-concept {
+  font-size: 13px;
+  color: #8b0000;
+  line-height: 1.6;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: rgba(139,0,0,0.03);
+  border-left: 2px solid rgba(139,0,0,0.15);
+  border-radius: 0 4px 4px 0;
+}
+.a4-word-popup-examples {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #666;
+  line-height: 1.8;
+  border-top: 1px solid rgba(0,0,0,0.06);
+  padding-top: 10px;
+}
+.a4-word-popup-example-item {
+  margin-bottom: 4px;
+}
+.a4-word-popup-close {
+  display: inline-block;
+  margin-top: 16px;
+  cursor: pointer;
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: #999;
+  padding: 6px 20px;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 3px;
+  transition: all 0.2s;
+}
+.a4-word-popup-close:hover {
+  color: #333;
+  border-color: rgba(0,0,0,0.25);
+}
+.a4-word-popup-nav {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+  gap: 10px;
+}
+.a4-word-popup-nav-btn {
+  flex: 1;
+  cursor: pointer;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: #888;
+  padding: 8px 0;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 3px;
+  text-align: center;
+  transition: all 0.2s;
+  background: transparent;
+}
+.a4-word-popup-nav-btn:hover {
+  color: #c0392b;
+  border-color: rgba(192,57,43,0.3);
+  background: rgba(192,57,43,0.03);
+}
+
 /* 书写阶段工作区提示 */
 .write-to-a4-label {
   font-size: 13px;
@@ -3127,9 +3330,14 @@ console.log('🌌 异世界深渊入口已激活');
         // 高亮选中的灯泡
         grid.querySelectorAll('.page-bulb').forEach(b => b.classList.remove('selected'));
         bulb.classList.add('selected');
-        // 开始学习该页
         const pageIndex = parseInt(bulb.dataset.page) - 1; // 0-indexed
-        startLearningPage(pageIndex);
+        // 🦐 已完成页面 → 整页A4复习模式
+        const completed = loadCompletedPages();
+        if (completed.has(pageIndex)) {
+          startA4FullReview(pageIndex);
+        } else {
+          startLearningPage(pageIndex);
+        }
       });
       grid.appendChild(bulb);
     }
@@ -4096,7 +4304,7 @@ console.log('🌌 异世界深渊入口已激活');
 
   // 状态
   let learnState = {
-    phase: 'idle',        // learn | write | recall | group-review | prev-group-review | page-review | page-done | idle
+    phase: 'idle',        // learn | write | recall | group-review | prev-group-review | page-review | page-done | a4-full-review | idle
     pageWords: [],
     currentGroup: 0,       // 0-4
     currentWordInGroup: 0, // 0-4
@@ -4193,6 +4401,9 @@ console.log('🌌 异世界深渊入口已激活');
       case 'page-done':
         renderPageDone(area, s);
         break;
+      case 'a4-full-review':
+        renderA4FullReview(area, s);
+        break;
       default:
         area.innerHTML = '<div class="word-card"><p style="color:rgba(200,170,140,0.3)">准备就绪</p></div>';
     }
@@ -4200,6 +4411,19 @@ console.log('🌌 异世界深渊入口已激活');
     if (s.phase !== 'page-done' && s.phase !== 'idle') {
       renderA4Paper(s);
     }
+  }
+
+  // 🦐 A4整页复习工作区渲染
+  function renderA4FullReview(area, s) {
+    area.innerHTML = `
+      <div class="learn-phase-badge" style="color:rgba(100,220,80,0.7);border-color:rgba(100,220,80,0.2);">整 页 复 习</div>
+      <div class="word-card" style="text-align:center;padding:18px 28px;">
+        <div style="font-size:15px;color:#666;letter-spacing:3px;">第 ${currentPageIdx + 1} 页</div>
+        <div style="font-size:14px;color:#aaa;margin-top:6px;letter-spacing:1px;">
+          共 ${s.a4Words.length} 词 &nbsp;·&nbsp; 点击A4纸上的单词查看详情 &nbsp;·&nbsp; 键盘 ← → 切换
+        </div>
+      </div>
+    `;
   }
 
   // WordCard 渲染
@@ -4359,6 +4583,7 @@ console.log('🌌 异世界深渊入口已激活');
 
     const isReviewPhase = s.phase === 'group-review' || s.phase === 'prev-group-review' || s.phase === 'page-review';
     const isWritePhase = s.phase === 'write';
+    const isFullReview = s.phase === 'a4-full-review';
 
     // 构建复习标记表
     const reviewMarks = {};
@@ -4371,18 +4596,18 @@ console.log('🌌 异世界深渊入口已激活');
     let html = '';
     for (let gi = 0; gi < 5; gi++) {
       const groupStart = gi * 5;
-      const isCurrentGroup = (gi === s.currentGroup);
+      const isCurrentGroup = !isFullReview && (gi === s.currentGroup);
       html += `<div class="a4-group${isCurrentGroup ? ' current' : ''}">`;
       html += '<div class="a4-row">';
       // 上行 3 个词
       for (let si = 0; si < 3; si++) {
-        html += renderA4Slot(s, gi, si, groupStart, isWritePhase, reviewMarks);
+        html += renderA4Slot(s, gi, si, groupStart, isWritePhase, isFullReview, reviewMarks);
       }
       html += '</div><div class="a4-row a4-row-shift">';
       // 下行 2 个词 — 内层2/3容器居中
       html += '<div class="a4-shift-inner">';
       for (let si = 3; si < 5; si++) {
-        html += renderA4Slot(s, gi, si, groupStart, isWritePhase, reviewMarks);
+        html += renderA4Slot(s, gi, si, groupStart, isWritePhase, isFullReview, reviewMarks);
       }
       html += '</div></div></div>';
     }
@@ -4397,8 +4622,20 @@ console.log('🌌 异世界深渊入口已激活');
     }
   }
 
-  function renderA4Slot(s, gi, si, groupStart, isWritePhase, reviewMarks) {
+  function renderA4Slot(s, gi, si, groupStart, isWritePhase, isFullReview, reviewMarks) {
     const wordIndex = groupStart + si;
+
+    // 🦐 整页复习模式：所有词直接显示，可点击
+    if (isFullReview) {
+      if (wordIndex < s.a4Words.length) {
+        const w = s.a4Words[wordIndex];
+        if (!w) return '<div class="a4-slot empty"></div>';
+        return `<div class="a4-slot filled review" onclick="openA4WordPopup(${wordIndex})">
+          <span class="a4-slot-text">${w.word}</span>
+        </div>`;
+      }
+      return '<div class="a4-slot empty"></div>';
+    }
 
     // 书写阶段：当前位置是输入框
     if (isWritePhase && gi === s.currentGroup && si === s.currentWordInGroup && s.a4WriteTarget) {
@@ -4921,6 +5158,104 @@ console.log('🌌 异世界深渊入口已激活');
       return null;
     }
   }
+
+  // ============== 🦐 整页A4复习模式 ==============
+  function startA4FullReview(pageIndex) {
+    const words = getPageWordsByIndex(currentBookId, pageIndex);
+    if (!words || words.length === 0) {
+      document.getElementById('learnStageArea').innerHTML =
+        '<div class="word-card"><p style="color:rgba(200,170,140,0.3)">该页暂无单词数据</p></div>';
+      showLearnPanel();
+      return;
+    }
+
+    currentPageIdx = pageIndex;
+    resetLearnState();
+    learnState.phase = 'a4-full-review';
+    learnState.pageWords = words;
+    // 全部词直接上A4纸
+    learnState.a4Words = words.slice(0, PAGE_SIZE);
+    learnState._reviewCurrentIndex = -1; // 当前弹窗单词索引
+    showLearnPanel();
+    renderLearnStage();
+  }
+
+  // 关闭A4复习模式返回灯泡墙
+  function exitA4FullReview() {
+    closeA4WordPopup();
+    hideLearnPanel();
+    showPageSelector(window._pageSource);
+    resetLearnState();
+  }
+
+  // A4复习模式下点击单词弹出详情
+  function openA4WordPopup(wordIndex) {
+    const w = learnState.a4Words[wordIndex];
+    if (!w) return;
+    learnState._reviewCurrentIndex = wordIndex;
+
+    const popup = document.createElement('div');
+    popup.id = 'a4WordPopup';
+    popup.className = 'a4-word-popup';
+    const total = learnState.a4Words.length;
+    const hasPrev = wordIndex > 0;
+    const hasNext = wordIndex < total - 1;
+    popup.innerHTML = `
+      <div class="a4-word-popup-overlay" onclick="closeA4WordPopup()"></div>
+      <div class="a4-word-popup-card">
+        <div class="a4-word-popup-word">
+          ${w.word}
+          <span class="a4-word-popup-speak" onclick="event.stopPropagation();speakWord('${w.word.replace(/'/g, "\\'")}')">🔊</span>
+        </div>
+        ${w.phonetic ? `<div class="a4-word-popup-phonetic">${w.phonetic}</div>` : ''}
+        ${w.pos ? `<div class="a4-word-popup-pos">${w.pos}</div>` : ''}
+        <div class="a4-word-popup-def">${w.definition}</div>
+        ${w.coreConcept ? `<div class="a4-word-popup-concept">💡 ${w.coreConcept}</div>` : ''}
+        ${w.examples && w.examples.length ? `
+          <div class="a4-word-popup-examples">
+            ${w.examples.map(ex => `<div class="a4-word-popup-example-item">📖 ${ex}</div>`).join('')}
+          </div>
+        ` : ''}
+        ${w.collocations && w.collocations.length ? `
+          <div class="a4-word-popup-examples">
+            ${w.collocations.map(c => `<div class="a4-word-popup-example-item">🔗 ${c}</div>`).join('')}
+          </div>
+        ` : ''}
+        <div class="a4-word-popup-nav">
+          ${hasPrev ? `<div class="a4-word-popup-nav-btn" onclick="openA4WordPopup(${wordIndex - 1})">← 上一个</div>` : '<div></div>'}
+          <span style="font-size:11px;color:#aaa;align-self:center;">${wordIndex + 1}/${total}</span>
+          ${hasNext ? `<div class="a4-word-popup-nav-btn" onclick="openA4WordPopup(${wordIndex + 1})">下一个 →</div>` : '<div></div>'}
+        </div>
+        <div class="a4-word-popup-close" onclick="closeA4WordPopup()">关 闭</div>
+      </div>
+    `;
+    document.body.appendChild(popup);
+    // 自动发音
+    setTimeout(() => speakWord(w.word), 150);
+  }
+
+  function closeA4WordPopup() {
+    const popup = document.getElementById('a4WordPopup');
+    if (popup) popup.remove();
+    learnState._reviewCurrentIndex = -1;
+  }
+
+  // 键盘控制：弹窗状态下左右箭头切换词，ESC关闭；无弹窗时ESC退出复习
+  document.addEventListener('keydown', function(e) {
+    if (learnState.phase !== 'a4-full-review') return;
+    const popup = document.getElementById('a4WordPopup');
+    if (!popup) {
+      if (e.key === 'Escape') { exitA4FullReview(); return; }
+      return;
+    }
+    if (e.key === 'Escape') { closeA4WordPopup(); return; }
+    if (e.key === 'ArrowLeft' && learnState._reviewCurrentIndex > 0) {
+      openA4WordPopup(learnState._reviewCurrentIndex - 1);
+    }
+    if (e.key === 'ArrowRight' && learnState._reviewCurrentIndex < learnState.a4Words.length - 1) {
+      openA4WordPopup(learnState._reviewCurrentIndex + 1);
+    }
+  });
 
   // ============== 开始学习某页 ==============
   function startLearningPage(pageIndex) {
