@@ -5019,110 +5019,71 @@ console.log('🌌 异世界深渊入口已激活');
   }
 
   // ============== 发音 ==============
-  // 🦐 语音引擎状态：预加载美式语音 + Chrome cancel() 竞态修复 + 错误重试
-  // 🦐 全局首次交互时预热语音引擎（iOS Safari 必须在用户手势中触发）
+  // 🦐 核心原理说明：
+  //   Chrome 的 speechSynthesis.speak() 必须在用户手势的同步调用栈内执行，
+  //   否则浏览器认为"非用户触发"而静默拒绝。手势有效期约 1 秒。
+  //   因此 speakWord 不能是 async 函数，不能有 await/计时器延迟。
+  //   语音库预热在首次交互时完成（见下方 bootstrap），之后的 speak() 即用即播。
+  // ==============
   if (!window._speakBootstrapped) {
     window._speakBootstrapped = true;
     const _bootstrapSpeak = () => {
       if ('speechSynthesis' in window) {
-        speechSynthesis.getVoices(); // 触发 voiceschanged 事件
+        speechSynthesis.getVoices(); // 触发 voiceschanged，加载语音库
         const dummy = new SpeechSynthesisUtterance('');
         dummy.volume = 0;
-        dummy.rate = 2;
-        speechSynthesis.speak(dummy);
-        speechSynthesis.cancel();
+        speechSynthesis.speak(dummy);  // 预热引擎（空字符串瞬间结束）
       }
     };
     ['click','touchstart','keydown'].forEach(evt => {
       document.addEventListener(evt, _bootstrapSpeak, { once: true, passive: true });
     });
   }
-  let _speakVoicesReady = false;
-  let _speakVoicesPromise = null;
-
-  function _ensureVoices() {
-    if (_speakVoicesReady) return Promise.resolve();
-    if (!('speechSynthesis' in window)) return Promise.resolve();
-    if (_speakVoicesPromise) return _speakVoicesPromise;
-
-    const voices = speechSynthesis.getVoices();
-    if (voices.length > 0) { _speakVoicesReady = true; return Promise.resolve(); }
-
-    _speakVoicesPromise = new Promise(resolve => {
-      const handler = () => {
-        speechSynthesis.removeEventListener('voiceschanged', handler);
-        _speakVoicesReady = true;
-        _speakVoicesPromise = null;
-        resolve();
-      };
-      speechSynthesis.addEventListener('voiceschanged', handler);
-      // 1.5s 兜底超时，防止 never-resolve
-      setTimeout(() => {
-        speechSynthesis.removeEventListener('voiceschanged', handler);
-        _speakVoicesReady = true;
-        _speakVoicesPromise = null;
-        resolve();
-      }, 1500);
-    });
-    return _speakVoicesPromise;
-  }
 
   function _getUSVoice() {
-    const voices = speechSynthesis.getVoices();
-    return (
-      voices.find(v => v.lang === 'en-US' && v.name.includes('Google')) ||
-      voices.find(v => v.lang === 'en-US' && v.name.includes('Samantha')) ||
-      voices.find(v => v.lang === 'en-US') ||
-      voices.find(v => v.lang.startsWith('en')) ||
-      null
-    );
+    if (!('speechSynthesis' in window)) return null;
+    try {
+      const voices = speechSynthesis.getVoices();
+      // 优先本地语音（localService），其次是任意 en-US
+      return (
+        voices.find(v => v.lang === 'en-US' && v.localService) ||
+        voices.find(v => v.lang === 'en-US') ||
+        voices.find(v => v.lang.startsWith('en-')) ||
+        voices.find(v => v.lang.startsWith('en')) ||
+        null
+      );
+    } catch(e) { return null; }
   }
 
-  let _speakRetryCount = 0;
-  const MAX_SPEAK_RETRIES = 3;
-
-  async function speakWord(text) {
+  function speakWord(text) {
     if (!('speechSynthesis' in window)) return;
     if (!text || !text.trim()) return;
 
-    await _ensureVoices();
+    // 🔑 必须同步执行——async/await/setTimeout 都会丢失用户手势
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-US';
+    u.rate = 0.85;
+    u.pitch = 1.0;
+    u.volume = 1.0;
 
-    // Chrome/Edge bug 修复：cancel 后延迟再 speak，避免竞态
-    speechSynthesis.cancel();
-    await new Promise(r => setTimeout(r, 60));
-
-    const utter = (retry) => {
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = 'en-US';
-      u.rate = 0.85;
-      u.pitch = 1.0;
-      u.volume = 1.0;
-
+    try {
       const voice = _getUSVoice();
       if (voice) u.voice = voice;
+    } catch(e) {}
 
-      const cleanup = () => {
-        _speakRetryCount = 0;
-      };
-
-      u.onend = cleanup;
-      u.onerror = (e) => {
-        // 'canceled' 是本函数自己的 cancel() 触发的，不算错误
-        if (e.error === 'canceled' || e.error === 'interrupted') { cleanup(); return; }
-        console.warn('🦐 speakWord error:', e.error, 'retry:', retry);
-        if (retry < MAX_SPEAK_RETRIES) {
-          _speakRetryCount = retry + 1;
-          setTimeout(() => utter(retry + 1), 150 * (retry + 1));
-        } else {
-          cleanup();
-          console.warn('🦐 speakWord 重试耗尽:', text);
-        }
-      };
-
-      speechSynthesis.speak(u);
+    u.onerror = (e) => {
+      // cancel/interrupted 不算真实错误（可能是快速连点造成）
+      if (e.error === 'canceled' || e.error === 'interrupted') return;
+      // 真实错误：静默重试 1 次（用计时器延迟是 OK 的，因为用户手势已用在上一个 speak）
+      const u2 = new SpeechSynthesisUtterance(text);
+      u2.lang = 'en-US';
+      u2.rate = 0.85;
+      try { const v = _getUSVoice(); if (v) u2.voice = v; } catch(e) {}
+      speechSynthesis.speak(u2);
     };
 
-    utter(0);
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
   }
 
   // ============== 本地judge移植 ==============
