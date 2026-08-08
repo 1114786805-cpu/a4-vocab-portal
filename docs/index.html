@@ -1938,7 +1938,7 @@ canvas {
     <h3>工作原理</h3>
     <div class="sync-info">
       <ol>
-        <li>输入 Token → 创建/连接私密 Gist</li>
+        <li>输入 Token → 创建/连接同步 Gist（公开可读）</li>
         <li>学习数据自动打包同步到云端</li>
         <li>所有设备用同一 Token → 共享数据</li>
         <li>保存时自动同步，打开时自动拉取</li>
@@ -5115,7 +5115,7 @@ console.log('🌌 异世界深渊入口已激活');
       var r = await fetch(GITHUB_API + '/gists', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description: 'A4 Paper — 多端同步数据', public: false, files: { 'data.json': { content: JSON.stringify(payload, null, 2) } } })
+        body: JSON.stringify({ description: 'A4 Paper — 多端同步数据', public: true, files: { 'data.json': { content: JSON.stringify(payload, null, 2) } } })
       });
       if (!r.ok) return null;
       var g = await r.json();
@@ -5191,26 +5191,32 @@ console.log('🌌 异世界深渊入口已激活');
 
   async function pullFromGistAnonymous() {
     var config = getStoredConfig();
-    var devId = getOrCreateDeviceId();
-    var gistId = (config && config.gistId) || GIST_FALLBACK_ID;
 
+    // 没有本地配置 → 说明这是全新浏览器，没有连接过同步
+    // 不能用硬编码 fallback ID（那是别人的/空的 Gist），直接跳过
+    if (!config || !config.gistId) {
+      console.log('🦐 匿名同步: 无本地配置，跳过（请先输入 Token 连接同步）');
+      return { pulled: false, message: '请先连接 GitHub 同步' };
+    }
+
+    var devId = getOrCreateDeviceId();
     try {
-      var remote = await readGistDataAnonymous(gistId);
-      if (!remote) return { pulled: false, message: '远程数据为空，跳过同步' };
+      var remote = await readGistDataAnonymous(config.gistId);
+      if (!remote) return { pulled: false, message: '远程数据为空，请检查网络或输入 Token' };
 
       var localEmpty = isLocalEmpty();
       var remoteTime = new Date(remote._meta.lastUpdatedAt).getTime();
-      var localTime = (config && config.lastSyncedAt) ? new Date(config.lastSyncedAt).getTime() : 0;
+      var localTime = config.lastSyncedAt ? new Date(config.lastSyncedAt).getTime() : 0;
 
       if (localEmpty) {
         var r1 = unpackRemoteData(remote);
-        saveGistConfig(config && config.gistId ? config.gistId : gistId, new Date().toISOString(), devId);
+        saveGistConfig(config.gistId, new Date().toISOString(), devId);
         return { pulled: true, keys: r1.keys, message: '已从云端恢复 ' + r1.keys.length + ' 项数据' };
       }
 
       if (remoteTime > localTime && remote._meta.deviceId !== devId) {
         var r2 = unpackRemoteData(remote);
-        saveGistConfig(gistId, new Date().toISOString(), devId);
+        saveGistConfig(config.gistId, new Date().toISOString(), devId);
         return { pulled: true, keys: r2.keys, message: '已同步云端最新数据 (' + r2.keys.length + ' 项)' };
       }
 
@@ -5231,15 +5237,31 @@ console.log('🌌 异世界深渊入口已激活');
     return { success: false, error: '写入 Gist 失败', message: '同步失败' };
   }
 
-  // --- 防抖自动同步 ---
+  // --- 防抖自动同步（先拉后推，避免覆盖其他设备数据）---
   var _syncTimer = null;
   function autoSyncToGist() {
     var token = getStoredToken();
     if (!token) return;
     if (_syncTimer) clearTimeout(_syncTimer);
     _syncTimer = setTimeout(function() {
-      pushToGist(token).then(function(r) {
-        if (r.success) { updateSyncUI(); console.log('🦐 自动同步: ' + r.message); }
+      // 先从云端拉取最新数据，再推送本地数据
+      pullFromGist(token).then(function(pullResult) {
+        if (pullResult.pulled) {
+          // 云端有更新的数据 → 已合并到本地 → 再把合并后的数据推上去
+          console.log('🦐 自动同步: 云端有更新, ' + pullResult.message);
+          return pushToGist(token);
+        } else if (pullResult.error && pullResult.error !== '远程数据为空') {
+          console.log('🦐 自动同步: 拉取失败 - ' + pullResult.error);
+          return null;
+        } else {
+          // 本地最新 → 只推
+          return pushToGist(token);
+        }
+      }).then(function(pushResult) {
+        if (pushResult && pushResult.success) {
+          updateSyncUI();
+          console.log('🦐 自动同步: ' + pushResult.message);
+        }
       }).catch(function(){});
     }, 2000);
   }
@@ -5272,7 +5294,7 @@ console.log('🌌 异世界深渊入口已激活');
         updateSyncUI();
       });
     } else {
-      // 无 Token：匿名拉取（仅读取，Gist 公开可读）
+      // 无 Token：尝试匿名拉取
       pullFromGistAnonymous().then(function(r) {
         if (r.pulled) {
           console.log('🦐 已匿名从云端恢复数据: ' + r.keys.join(', '));
@@ -5281,6 +5303,13 @@ console.log('🌌 异世界深渊入口已激活');
           setTimeout(function() { location.reload(); }, 500);
         } else {
           console.log('🦐 匿名同步: ' + r.message);
+          // 无本地配置 → 显示提示引导用户连接
+          if (r.message === '请先连接 GitHub 同步') {
+            var dot = document.getElementById('syncDot');
+            if (dot) { dot.className = 'sync-status-dot syncing'; dot.title = '点击右上角 ☁️ 连接同步'; }
+            var txt = document.getElementById('syncStatusText');
+            if (txt) txt.textContent = '点击连接';
+          }
           renderCustomBookRows();
           try { renderArticleList(); } catch(e) {}
           updateSyncUI();
@@ -5387,10 +5416,31 @@ console.log('🌌 异世界深渊入口已激活');
     var dot = document.getElementById('syncDot');
     dot.className = 'sync-status-dot syncing';
     document.getElementById('syncStatusText').textContent = '同步中…';
-    showSyncMsg('正在同步…', 'info');
+    showSyncMsg('正在拉取云端数据…', 'info');
 
-    var result = await pushToGist(token);
-    showSyncMsg(result.message, result.error ? 'error' : 'info');
+    // 1) 先从云端拉取最新数据
+    var pullResult = await pullFromGist(token);
+    if (pullResult.pulled) {
+      showSyncMsg(pullResult.message + ' — 页面将自动刷新', 'info');
+      sessionStorage.setItem('_gistPulled', '1');
+      updateSyncUI();
+      setTimeout(function() { location.reload(); }, 800);
+      return;
+    }
+    if (pullResult.error && pullResult.error !== '远程数据为空') {
+      showSyncMsg('拉取失败: ' + pullResult.error, 'error');
+      updateSyncUI();
+      return;
+    }
+
+    // 2) 再推送本地数据到云端
+    showSyncMsg('正在上传本地数据…', 'info');
+    var pushResult = await pushToGist(token);
+    if (pushResult.success) {
+      showSyncMsg('✅ 双向同步完成', 'info');
+    } else {
+      showSyncMsg(pushResult.message, pushResult.error ? 'error' : 'info');
+    }
     updateSyncUI();
   }
 
