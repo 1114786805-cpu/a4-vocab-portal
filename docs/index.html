@@ -5059,31 +5059,36 @@ console.log('🌌 异世界深渊入口已激活');
     if (!('speechSynthesis' in window)) return;
     if (!text || !text.trim()) return;
 
-    // 🔑 必须同步执行——async/await/setTimeout 都会丢失用户手势
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'en-US';
-    u.rate = 0.85;
-    u.pitch = 1.0;
-    u.volume = 1.0;
-
-    try {
-      const voice = _getUSVoice();
-      if (voice) u.voice = voice;
-    } catch(e) {}
-
-    u.onerror = (e) => {
-      // cancel/interrupted 不算真实错误（可能是快速连点造成）
-      if (e.error === 'canceled' || e.error === 'interrupted') return;
-      // 真实错误：静默重试 1 次（用计时器延迟是 OK 的，因为用户手势已用在上一个 speak）
-      const u2 = new SpeechSynthesisUtterance(text);
-      u2.lang = 'en-US';
-      u2.rate = 0.85;
-      try { const v = _getUSVoice(); if (v) u2.voice = v; } catch(e) {}
-      speechSynthesis.speak(u2);
-    };
-
+    // 🔑 先同步 cancel（利用当前用户手势窗口）
     speechSynthesis.cancel();
-    speechSynthesis.speak(u);
+
+    // 🔑 Chrome兼容：cancel 和 speak 之间需要微小间隔
+    //    否则 Chrome 内部的 cancel 清理会吞掉新 speak 的 utterance
+    //    speechSynthesis.speak() 不受 autoplay 策略限制，setTimeout 内调用安全
+    var _text = text;
+    setTimeout(function() {
+      const u = new SpeechSynthesisUtterance(_text);
+      u.lang = 'en-US';
+      u.rate = 0.85;
+      u.pitch = 1.0;
+      u.volume = 1.0;
+
+      try {
+        const voice = _getUSVoice();
+        if (voice) u.voice = voice;
+      } catch(e) {}
+
+      u.onerror = function(e) {
+        if (e.error === 'canceled' || e.error === 'interrupted') return;
+        const u2 = new SpeechSynthesisUtterance(_text);
+        u2.lang = 'en-US';
+        u2.rate = 0.85;
+        try { var v = _getUSVoice(); if (v) u2.voice = v; } catch(e2) {}
+        speechSynthesis.speak(u2);
+      };
+
+      speechSynthesis.speak(u);
+    }, 50);
   }
 
   // ============== 本地judge移植 ==============
@@ -5543,7 +5548,7 @@ console.log('🌌 异世界深渊入口已激活');
   async function readGistData(gistId, token) {
     try {
       var r = await githubFetch(GITHUB_API + '/gists/' + gistId, token);
-      if (!r.ok) return null;
+      if (!r.ok) { if (r.status === 401) _skipSync = true; return null; }
       var g = await r.json();
       var f = g.files && g.files['data.json'];
       if (!f || !f.content) return null;
@@ -5583,6 +5588,7 @@ console.log('🌌 异世界深渊入口已激活');
         method: 'PATCH',
         body: JSON.stringify({ files: { 'data.json': { content: JSON.stringify(payload, null, 2) } } })
       });
+      if (!r.ok && r.status === 401) _skipSync = true;
       return r.ok;
     } catch(e) { return false; }
   }
@@ -5721,7 +5727,9 @@ console.log('🌌 异世界深渊入口已激活');
 
   // --- 防抖自动同步（先拉后推，避免覆盖其他设备数据）---
   var _syncTimer = null;
+  var _skipSync = false;  // token 401 时停掉自动同步，避免 Console 刷屏
   function autoSyncToGist() {
+    if (_skipSync) return;
     var token = getStoredToken();
     if (!token) return;
     if (_syncTimer) clearTimeout(_syncTimer);
@@ -5869,6 +5877,7 @@ console.log('🌌 异世界深渊入口已激活');
     }
 
     localStorage.setItem('a4paper_github_token', token);
+    _skipSync = false;  // token 更新后重新允许同步
     var result = await pullFromGist(token);
     showSyncMsg((result.message || '连接成功') + (verif.username ? ' (GitHub: ' + verif.username + ')' : ''), result.error ? 'error' : 'info');
     updateSyncUI();
